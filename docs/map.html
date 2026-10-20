@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
     <meta name="theme-color" content="#04060e">
     <title>校区地图 · 校园失物招领</title>
     <link rel="stylesheet" href="css/style.css">
@@ -17,29 +17,40 @@
             <div class="sub">安徽大学磬苑校区 · 看清每件物品丢在哪里，让寻找不再盲目</div>
         </div>
         <div class="flex gap-8 flex-wrap">
-            <button class="btn-gray btn-sm" id="btn-reset">${重置}</button>
+            <button class="btn-gray btn-sm" id="btn-reset">重置</button>
             <button class="btn-sm" id="btn-publish">去发布</button>
         </div>
     </div>
 
     <div class="map-layout">
-        <!-- ================= 左侧：地图主体 ================= -->
-        <section class="map-main card">
+        <!-- ================= 地图主体 ================= -->
+        <section class="map-main">
             <div class="map-toolbar">
                 <div class="map-legend" id="legend"></div>
                 <div class="map-stats" id="map-stats"></div>
             </div>
 
             <div class="map-stage" id="map-stage">
-                <img id="map-img" src="img/campus-map.jpg" alt="磬苑校区地图" draggable="false">
-                <div class="map-layer" id="map-layer"></div>
-                <div class="map-hint">滚轮缩放 · 拖拽平移 · 点击图钉查看物品</div>
-                <div class="map-zoom">
-                    <button id="z-in" title="放大">+</button>
-                    <button id="z-out" title="缩小">−</button>
-                    <button id="z-fit" title="复位">⤢</button>
+                <!-- 模糊底图：当舞台比地图宽时填充左右留白，视觉上像「铺满」 -->
+                <img class="map-blur" id="map-blur" src="img/campus-map.jpg" alt="" aria-hidden="true" draggable="false">
+                <div class="map-world" id="map-world">
+                    <img id="map-img" src="img/campus-map.jpg" alt="磬苑校区地图" draggable="false">
+                    <div class="map-layer" id="map-layer"></div>
                 </div>
-                <div class="map-tip" id="map-tip"></div>
+
+                <div class="map-hint" id="map-hint">拖拽移动 · 滚轮/双指缩放 · 点击图钉看物品</div>
+
+                <div class="map-zoom">
+                    <button id="z-in" title="放大" aria-label="放大">+</button>
+                    <button id="z-out" title="缩小" aria-label="缩小">−</button>
+                    <button id="z-fit" title="复位" aria-label="复位">⤢</button>
+                </div>
+
+                <!-- 点图钉弹出的物品卡 -->
+                <div class="map-pop" id="map-pop">
+                    <button class="pop-x" id="pop-x" aria-label="关闭">×</button>
+                    <div id="pop-body"></div>
+                </div>
             </div>
         </section>
 
@@ -74,14 +85,6 @@
                 </h2>
                 <div id="place-list"></div>
             </div>
-
-            <div class="card" id="item-card" style="display:none">
-                <h2 class="card-title">
-                    <span class="ico-chip" id="ico-items"></span>
-                    <span id="item-title">该地点物品</span>
-                </h2>
-                <div id="item-list"></div>
-            </div>
         </aside>
     </div>
 </div>
@@ -96,16 +99,18 @@
 <script>
 document.getElementById('ico-filter').innerHTML = ICON.tag;
 document.getElementById('ico-list').innerHTML = ICON.pin;
-document.getElementById('ico-items').innerHTML = ICON.inbox;
 document.getElementById('btn-reset').innerHTML = ICON.refresh + ' 重置';
+
+/* ================= 常量 ================= */
+const RATIO = CampusMap.MAP_W / CampusMap.MAP_H;   /* 1700 / 1543 ≈ 1.102 */
 
 /* ================= 状态 ================= */
 let ALL_ITEMS = [];
-let FILTER = { type: '', cats: new Set(), place: '' };
-let ZOOM = 1, TX = 0, TY = 0;
-let SELECTED = null;
+const FILTER = { type: '', cats: new Set(), place: '' };
+let SELECTED = null;          /* 当前展开的地点 */
+const VIEW = { x: 0, y: 0, z: 1 };   /* 平移 + 缩放 */
 
-/* 物品归属地点：优先用物品自带的 mapX/mapY 反查最近地点，其次按地点名归一化 */
+/* 物品归属地点 */
 function placeOf(it) {
     const byName = CampusMap.normalizeLocation(it.location);
     if (byName) return byName;
@@ -115,20 +120,18 @@ function placeOf(it) {
     }
     return null;
 }
-
-/* 物品在地图上的落点：有精确坐标就用精确坐标 */
+/* 物品在地图上的落点 */
 function coordOf(it) {
     if (it.mapX != null && it.mapY != null) return { x: it.mapX, y: it.mapY };
     const p = CampusMap.byId(placeOf(it));
     return p ? { x: p.x, y: p.y } : null;
 }
 
-/* ================= 初始化图例 ================= */
+/* ================= 图例 / 分类 chip / 建筑下拉 ================= */
 document.getElementById('legend').innerHTML =
     Object.entries(CampusMap.CAT_COLOR).map(([cat, color]) =>
         `<span class="lg"><i style="background:${color}"></i>${cat}</span>`).join('');
 
-/* ================= 分类 chip ================= */
 document.getElementById('chip-cat').innerHTML =
     Object.entries(CampusMap.CAT_COLOR).map(([cat, color]) =>
         `<button class="chip" data-cat="${cat}" style="--c:${color}">${cat}</button>`).join('');
@@ -142,7 +145,6 @@ document.querySelectorAll('#chip-cat .chip').forEach(b => {
     };
 });
 
-/* ================= 类型分段 ================= */
 document.querySelectorAll('#seg-type button').forEach(b => {
     b.onclick = () => {
         document.querySelectorAll('#seg-type button').forEach(x => x.classList.remove('active'));
@@ -152,13 +154,10 @@ document.querySelectorAll('#seg-type button').forEach(b => {
     };
 });
 
-/* ================= 建筑下拉 ================= */
 (function () {
     const sel = document.getElementById('f-place');
     const byCat = {};
-    CampusMap.PLACES.forEach(p => {
-        (byCat[p.cat] = byCat[p.cat] || []).push(p);
-    });
+    CampusMap.PLACES.forEach(p => (byCat[p.cat] = byCat[p.cat] || []).push(p));
     let html = '<option value="">全部建筑</option>';
     Object.keys(CampusMap.CAT_COLOR).forEach(cat => {
         if (!byCat[cat]) return;
@@ -199,11 +198,230 @@ function visibleItems() {
     });
 }
 
-/* ================= 渲染地图 ================= */
+/* ================= 视图：尺寸与变换 ================= */
+const stage = document.getElementById('map-stage');
+const world = document.getElementById('map-world');
+const layer = document.getElementById('map-layer');
+
+let baseW = 0, baseH = 0;
+
+function layout() {
+    const sw = stage.clientWidth;
+    const sh = stage.clientHeight;
+    const mobile = window.innerWidth <= 900;
+
+    if (mobile) {
+        /*
+         * 手机：高度优先。世界按舞台高度等比放大到 h*RATIO（约为屏宽的 1.57 倍），
+         * 横向初始居中，靠单指左右拖动查看，纵向正好铺满不裁切。
+         */
+        baseH = sh;
+        baseW = baseH * RATIO;
+        VIEW.z = Math.min(VIEW.z, 1);
+        VIEW.y = 0;
+    } else {
+        /*
+         * 桌面：舞台由 CSS 锁成与底图同比例（aspect-ratio: 1700/1543），
+         * contain 的结果就等于「铺满」，横向纵向都 100%，零黑边零裁切。
+         * 保留 Math.min 兜底：浏览器不支持 aspect-ratio 时退化成标准 contain。
+         */
+        baseW = Math.min(sw, sh * RATIO);
+        baseH = baseW / RATIO;
+        VIEW.y = Math.min(0, Math.max(sh - baseH * VIEW.z, VIEW.y));
+    }
+
+    world.style.width = baseW + 'px';
+    world.style.height = baseH + 'px';
+    /* 横向居中（世界比舞台宽时 clampView 会把它限制在可拖范围内） */
+    if (baseW * VIEW.z > sw) {
+        const maxX = sw - baseW * VIEW.z;
+        VIEW.x = Math.min(0, Math.max(maxX, Math.round(maxX / 2)));
+    } else {
+        VIEW.x = 0;
+    }
+    clampView();
+    applyView();
+}
+
+function applyView() {
+    const sw = stage.clientWidth;
+    const sh = stage.clientHeight;
+    const w = baseW * VIEW.z;
+    const h = baseH * VIEW.z;
+    /* 水平方向：图比舞台窄就居中，宽就按 VIEW.x 平移（已 clamp 在边界内） */
+    const ox = w <= sw ? (sw - w) / 2 : 0;
+    /* 垂直方向：同样，并且默认锚定顶部（VIEW.y = 0 时顶部对齐舞台顶部） */
+    const oy = h <= sh ? (sh - h) / 2 : 0;
+    const tx = ox + VIEW.x;
+    const ty = oy + VIEW.y;
+    world.style.transform = `translate(${tx}px, ${ty}px) scale(${VIEW.z})`;
+    /* 图钉在放大时反向缩放，保持可点击尺寸 */
+    const inv = 1 / Math.sqrt(VIEW.z);
+    layer.style.setProperty('--pin-scale', inv.toFixed(3));
+}
+
+function clampView() {
+    const sw = stage.clientWidth, sh = stage.clientHeight;
+    const w = baseW * VIEW.z, h = baseH * VIEW.z;
+    /*
+     * 平移范围 = 图超出舞台的部分。图比舞台大时，x/y 取值 [-(w-sw), 0]，
+     * 保证边缘不会拖出空白；图比舞台小时固定居中（x/y 恒为 0）。
+     */
+    if (w > sw) VIEW.x = Math.max(sw - w, Math.min(0, VIEW.x));
+    else VIEW.x = 0;
+    if (h > sh) VIEW.y = Math.max(sh - h, Math.min(0, VIEW.y));
+    else VIEW.y = 0;
+}
+
+function zoomBy(delta, cx, cy) {
+    const old = VIEW.z;
+    const next = Math.min(5, Math.max(1, VIEW.z * (1 + delta)));
+    if (next === old) return;
+    const sw = stage.clientWidth, sh = stage.clientHeight;
+    const px = (cx == null ? sw / 2 : cx);
+    const py = (cy == null ? sh / 2 : cy);
+    /* 以指针为锚点：保持指针下的地物不动 */
+    const before = (px - VIEW.x) / old;
+    const beforeY = (py - VIEW.y) / old;
+    VIEW.z = next;
+    VIEW.x = px - before * next;
+    VIEW.y = py - beforeY * next;
+    clampView();
+    applyView();
+}
+
+/* ================= 指针交互（鼠标 + 触摸统一） ================= */
+const pointers = new Map();
+let dragging = false;
+let dragMoved = 0;
+let startDist = 0, startZ = 1, startMid = null;
+/*
+ * setPointerCapture 会把后续 pointerup / click 的目标重定向到 stage，
+ * 导致 .mp-pin 上的 click 监听收不到事件（桌面端鼠标点图钉时表现为「点了没反应」）。
+ * 因此这里记住按下时的真实目标，在 endPointer 里自己判定点击。
+ */
+let downTarget = null;
+let lastTapAt = 0;
+
+stage.addEventListener('pointerdown', e => {
+    if (e.target.closest('.map-zoom') || e.target.closest('.map-pop')) return;
+    downTarget = e.target;
+    stage.setPointerCapture(e.pointerId);
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    dragMoved = 0;
+    dragging = true;
+    if (pointers.size === 2) {
+        const [a, b] = [...pointers.values()];
+        startDist = Math.hypot(a.x - b.x, a.y - b.y);
+        startZ = VIEW.z;
+        startMid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+    }
+    stage.classList.add('grabbing');
+});
+
+stage.addEventListener('pointermove', e => {
+    if (!pointers.has(e.pointerId)) return;
+    const prev = pointers.get(e.pointerId);
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+    if (pointers.size >= 2 && startMid) {
+        /* 双指缩放 */
+        const [a, b] = [...pointers.values()];
+        const dist = Math.hypot(a.x - b.x, a.y - b.y);
+        if (startDist > 0) {
+            const r = stage.getBoundingClientRect();
+            const midX = (a.x + b.x) / 2 - r.left;
+            const midY = (a.y + b.y) / 2 - r.top;
+            const targetZ = Math.min(5, Math.max(1, startZ * (dist / startDist)));
+            const delta = targetZ / VIEW.z - 1;
+            if (Math.abs(delta) > 0.001) zoomBy(delta, midX, midY);
+        }
+        dragMoved = 99;
+        return;
+    }
+
+    const dx = e.clientX - prev.x;
+    const dy = e.clientY - prev.y;
+    dragMoved += Math.abs(dx) + Math.abs(dy);
+    VIEW.x += dx;
+    VIEW.y += dy;
+    clampView();
+    applyView();
+});
+
+function endPointer(e) {
+    const moved = dragMoved;
+    pointers.delete(e.pointerId);
+    if (pointers.size < 2) { startMid = null; startDist = 0; }
+    if (pointers.size === 0) {
+        dragging = false;
+        stage.classList.remove('grabbing');
+        /* 位移在阈值内 → 视为点击（指针捕获已经把 click 目标改掉了，只能自己派发） */
+        if (moved <= 8 && downTarget && downTarget.closest) {
+            const pin = downTarget.closest('.mp-pin');
+            if (pin && pin.dataset.place) {
+                lastTapAt = Date.now();
+                SELECTED = pin.dataset.place;
+                render();
+                showPop(SELECTED);
+            }
+        }
+        downTarget = null;
+    }
+}
+stage.addEventListener('pointerup', endPointer);
+stage.addEventListener('pointercancel', endPointer);
+stage.addEventListener('pointerleave', endPointer);
+
+/* 滚轮缩放 */
+stage.addEventListener('wheel', e => {
+    e.preventDefault();
+    const r = stage.getBoundingClientRect();
+    zoomBy(e.deltaY > 0 ? -0.18 : 0.18, e.clientX - r.left, e.clientY - r.top);
+}, { passive: false });
+
+/* 双击放大 */
+stage.addEventListener('dblclick', e => {
+    const r = stage.getBoundingClientRect();
+    zoomBy(0.7, e.clientX - r.left, e.clientY - r.top);
+});
+
+/* ================= 渲染 ================= */
+/*
+ * 图钉锚点安全夹取：.mp-pin 用 translate(-50%,-100%) 从锚点向上绘制，
+ * 所以锚点太靠上时钉体会探出 .map-stage 顶部被 overflow:hidden 裁掉。
+ * 这里按「世界高度」换算出需要的最小/最大百分比，把锚点夹进安全区，
+ * 最多只偏移 1~2 个百分点，肉眼几乎看不出来，但图钉不再被切。
+ */
+function safeTopPct() {
+    /* 钉体 34px * 缩放(最大 1.45) + 描边，留 6px 余量；世界高度为 baseH */
+    const pinMax = 34 * 1.45 + 8;
+    if (!baseH) return 0;
+    return Math.min(18, (pinMax / baseH) * 100);
+}
+function safeBottomPct() {
+    /* 底部只需避开钉尖下方一点点（钉尖就在锚点上） */
+    if (!baseH) return 100;
+    const pad = 10 / baseH * 100;
+    return Math.max(82, 100 - pad);
+}
+/*
+ * 横向安全夹取：手机端世界比舞台宽（横向可拖），初始居中时最左/最右
+ * 的图钉会被裁掉一半。图钉宽约 34*1.45=49px，锚点在中心，所以左右各留半个宽度。
+ */
+function safeLeftPct() {
+    if (!baseW) return 0;
+    const half = (34 * 1.45) / 2 + 6;
+    return Math.min(18, (half / baseW) * 100);
+}
+function safeRightPct() {
+    if (!baseW) return 100;
+    const half = (34 * 1.45) / 2 + 6;
+    return Math.max(82, 100 - (half / baseW) * 100);
+}
+
 function render() {
     const items = visibleItems();
-
-    /* --- 按地点聚合 --- */
     const byPlace = {};
     items.forEach(it => {
         const p = placeOf(it);
@@ -211,27 +429,27 @@ function render() {
         (byPlace[p] = byPlace[p] || []).push(it);
     });
 
-    /* --- 画图钉 --- */
-    const layer = document.getElementById('map-layer');
     const max = Math.max(1, ...Object.values(byPlace).map(a => a.length));
-
     let html = '';
-    /* 所有地点先画小圆点，有物品的叠加大图钉 */
-    CampusMap.PLACES.forEach(p => {
-        const n = (byPlace[p.id] || []).length;
-        const color = CampusMap.CAT_COLOR[p.cat];
-        if (FILTER.cats.size && !FILTER.cats.has(p.cat)) return;
 
+    CampusMap.PLACES.forEach(p => {
+        if (FILTER.cats.size && !FILTER.cats.has(p.cat)) return;
+        const list = byPlace[p.id] || [];
+        const n = list.length;
+        const color = CampusMap.CAT_COLOR[p.cat];
+
+        const topPct = Math.min(safeBottomPct(), Math.max(safeTopPct(), p.y));
+        const leftPct = Math.min(safeRightPct(), Math.max(safeLeftPct(), p.x));
         if (n === 0) {
-            html += `<span class="mp-dot" style="left:${p.x}%;top:${p.y}%;--c:${color}"
+            html += `<span class="mp-dot" style="left:${leftPct}%;top:${topPct}%;--c:${color}"
                         title="${p.id}"></span>`;
         } else {
-            /* 图钉大小随数量放大，最多 1.7 倍 */
-            const scale = 1 + 0.7 * (n / max);
-            const lost = (byPlace[p.id].filter(x => x.type === 'LOST')).length;
+            const lost = list.filter(x => x.type === 'LOST').length;
             const found = n - lost;
+            /* 数量越多图钉越大，但封顶，避免遮住底图 */
+            const scale = Math.min(1.45, 1 + 0.55 * (n / max));
             html += `<button class="mp-pin${SELECTED === p.id ? ' sel' : ''}"
-                        style="left:${p.x}%;top:${p.y}%;--c:${color};--s:${scale}"
+                        style="left:${leftPct}%;top:${topPct}%;--c:${color};--s:${scale.toFixed(2)}"
                         data-place="${p.id}">
                         <span class="pin-body"><b>${n}</b></span>
                         <span class="pin-tip">
@@ -243,31 +461,30 @@ function render() {
     });
     layer.innerHTML = html;
 
+    /* 图钉点击（区分拖动与点击） */
     layer.querySelectorAll('.mp-pin').forEach(b => {
-        b.onclick = e => {
+        b.addEventListener('click', e => {
             e.stopPropagation();
+            if (dragMoved > 8) return;                /* 拖动结束的误触忽略 */
+            if (Date.now() - lastTapAt < 400) return;  /* 已由 endPointer 处理过 */
             SELECTED = b.dataset.place;
             render();
-            renderItemList(SELECTED);
-        };
+            showPop(SELECTED);
+        });
     });
 
-    /* --- 统计 --- */
     const lostN = items.filter(i => i.type === 'LOST').length;
-    const foundN = items.filter(i => i.type === 'FOUND').length;
     document.getElementById('map-stats').innerHTML =
         `<span>共 <b>${items.length}</b> 件</span>
          <span class="l">寻物 <b>${lostN}</b></span>
-         <span class="f">招领 <b>${foundN}</b></span>`;
+         <span class="f">招领 <b>${items.length - lostN}</b></span>`;
 
-    renderPlaceList(byPlace, items);
-
-    if (SELECTED) renderItemList(SELECTED);
-    else document.getElementById('item-card').style.display = 'none';
+    renderPlaceList(byPlace);
+    if (SELECTED && !byPlace[SELECTED]) hidePop();
 }
 
 /* ================= 地点排行 ================= */
-function renderPlaceList(byPlace, items) {
+function renderPlaceList(byPlace) {
     const arr = Object.entries(byPlace)
         .map(([id, list]) => ({ id, n: list.length, cat: (CampusMap.byId(id) || {}).cat }))
         .sort((a, b) => b.n - a.n);
@@ -295,128 +512,142 @@ function renderPlaceList(byPlace, items) {
         b.onclick = () => {
             SELECTED = b.dataset.place;
             render();
-            renderItemList(SELECTED);
-            /* 地图上滚动到该点 */
-            const pin = document.querySelector(`.mp-pin[data-place="${SELECTED}"]`);
-            if (pin) pin.scrollIntoView({ block: 'center', behavior: 'smooth' });
+            focusPlace(SELECTED);
+            showPop(SELECTED);
         };
     });
 }
 
-/* ================= 物品列表 ================= */
-function renderItemList(placeId) {
+/* 把地图平移到某地点并放大 */
+function focusPlace(placeId) {
+    const p = CampusMap.byId(placeId);
+    if (!p) return;
+    VIEW.z = Math.min(5, Math.max(2.0, VIEW.z));
+    const sw = stage.clientWidth, sh = stage.clientHeight;
+    const w = baseW * VIEW.z, h = baseH * VIEW.z;
+    /* 让该点落在舞台中心；clampView 会把越界值拉回合法范围 */
+    const ox = w <= sw ? (sw - w) / 2 : 0;
+    const oy = h <= sh ? (sh - h) / 2 : 0;
+    VIEW.x = ox + (sw / 2 - p.x / 100 * w);
+    VIEW.y = oy + (sh / 2 - p.y / 100 * h);
+    clampView();
+    applyView();
+}
+
+/* 复位到「宽度铺满 + 顶部对齐」的初始视图 */
+function fitView() {
+    VIEW.z = 1;
+    VIEW.x = 0;
+    VIEW.y = 0;
+    clampView();
+    applyView();
+}
+
+/* ================= 图钉弹窗 ================= */
+const pop = document.getElementById('map-pop');
+const popBody = document.getElementById('pop-body');
+
+document.getElementById('pop-x').onclick = hidePop;
+
+function hidePop() {
+    pop.classList.remove('open');
+    SELECTED = null;
+}
+
+function showPop(placeId) {
     const p = CampusMap.byId(placeId);
     if (!p) return;
     const list = visibleItems().filter(it => placeOf(it) === placeId);
-
-    const card = document.getElementById('item-card');
-    card.style.display = '';
+    if (!list.length) { hidePop(); return; }
 
     const lost = list.filter(x => x.type === 'LOST').length;
     const found = list.length - lost;
-    document.getElementById('item-title').innerHTML =
-        `${esc(placeId)}
-         <span class="badge badge-cyan" style="margin-left:8px;font-size:11.5px">${p.cat}</span>
-         <span class="muted" style="font-size:12.5px;font-weight:500;margin-left:6px">
-            寻物 ${lost} · 招领 ${found}
-         </span>`;
 
-    if (!list.length) {
-        document.getElementById('item-list').innerHTML = emptyState('该地点暂无相关物品', 'inbox');
-        return;
-    }
-
-    document.getElementById('item-list').innerHTML = list.map(it => `
-        <a class="mini-item" href="item.html?id=${it.id}">
-            <div class="mi-top">
-                ${typeBadge(it.type)}
-                ${statusBadge(it.status)}
-            </div>
-            <div class="mi-name">${esc(it.name)}</div>
-            <div class="mi-meta">${ICON.clock} ${fmtTime(it.eventTime)}</div>
-        </a>`).join('');
+    popBody.innerHTML = `
+        <div class="pop-head">
+            <span class="pop-dot" style="background:${CampusMap.CAT_COLOR[p.cat]}"></span>
+            <b class="pop-name">${esc(placeId)}</b>
+            <span class="pop-cat">${p.cat}</span>
+        </div>
+        <div class="pop-stat">寻物 ${lost} · 招领 ${found}</div>
+        <div class="pop-list">
+            ${list.map(it => `
+                <a class="pop-item" href="item.html?id=${it.id}">
+                    <div class="pi-top">${typeBadge(it.type)}${statusBadge(it.status)}</div>
+                    <div class="pi-name">${esc(it.name)}</div>
+                    <div class="pi-meta">${fmtTime(it.eventTime)} · ${esc(it.category)}</div>
+                </a>`).join('')}
+        </div>`;
+    pop.classList.add('open');
 }
 
-/* ================= 缩放 / 平移 ================= */
-const stage = document.getElementById('map-stage');
-const img = document.getElementById('map-img');
-const layer = document.getElementById('map-layer');
-
-function applyTransform() {
-    const t = `translate(${TX}px, ${TY}px) scale(${ZOOM})`;
-    img.style.transform = t;
-    layer.style.transform = t;
-}
-function zoomAt(delta, cx, cy) {
-    const old = ZOOM;
-    ZOOM = Math.min(4, Math.max(1, ZOOM + delta));
-    if (ZOOM === old) return;
-    /* 以鼠标位置为锚点缩放 */
-    const r = stage.getBoundingClientRect();
-    const px = (cx ?? r.width / 2), py = (cy ?? r.height / 2);
-    TX = px - (px - TX) * (ZOOM / old);
-    TY = py - (py - TY) * (ZOOM / old);
-    if (ZOOM === 1) { TX = 0; TY = 0; }
-    applyTransform();
-}
-
-stage.addEventListener('wheel', e => {
-    e.preventDefault();
-    const r = stage.getBoundingClientRect();
-    zoomAt(e.deltaY > 0 ? -0.25 : 0.25, e.clientX - r.left, e.clientY - r.top);
-}, { passive: false });
-
-let dragging = false, sx = 0, sy = 0, ox = 0, oy = 0;
-stage.addEventListener('mousedown', e => {
-    if (e.target.closest('.mp-pin')) return;
-    dragging = true; sx = e.clientX; sy = e.clientY; ox = TX; oy = TY;
-    stage.classList.add('grabbing');
-});
-window.addEventListener('mousemove', e => {
-    if (!dragging) return;
-    TX = ox + (e.clientX - sx);
-    TY = oy + (e.clientY - sy);
-    applyTransform();
-});
-window.addEventListener('mouseup', () => {
-    dragging = false;
-    stage.classList.remove('grabbing');
-});
-
-document.getElementById('z-in').onclick = () => zoomAt(0.35);
-document.getElementById('z-out').onclick = () => zoomAt(-0.35);
-document.getElementById('z-fit').onclick = () => { ZOOM = 1; TX = 0; TY = 0; applyTransform(); };
+/* ================= 控件 ================= */
+document.getElementById('z-in').onclick = () => zoomBy(0.45);
+document.getElementById('z-out').onclick = () => zoomBy(-0.35);
+document.getElementById('z-fit').onclick = () => {
+    fitView(); hidePop();
+};
 document.getElementById('btn-reset').onclick = () => {
-    FILTER = { type: '', cats: new Set(), place: '' };
-    SELECTED = null;
+    FILTER.type = ''; FILTER.cats.clear(); FILTER.place = '';
     document.querySelectorAll('#seg-type button').forEach(x =>
         x.classList.toggle('active', x.dataset.v === ''));
     document.querySelectorAll('#chip-cat .chip').forEach(x => x.classList.remove('on'));
     document.getElementById('f-place').value = '';
-    ZOOM = 1; TX = 0; TY = 0; applyTransform();
-    render();
+    fitView(); hidePop(); render();
 };
 document.getElementById('btn-publish').onclick = () => { location.href = 'publish.html'; };
 
+/* 点空白处关弹窗 */
+stage.addEventListener('click', e => {
+    if (e.target === stage || e.target === world || e.target.id === 'map-img') {
+        if (dragMoved <= 8) hidePop();
+    }
+});
+
 /* ================= 启动 ================= */
+window.addEventListener('resize', () => { layout(); render(); });
+
 (async () => {
     await loadUser();
     renderNav('map.html');
+    layout();
+    if (window.innerWidth < 900) {
+        document.getElementById('map-hint').textContent = '单指拖动 · 双指缩放 · 点图钉看物品';
+    }
     await loadData();
 })();
 </script>
 
 <style>
-.container-wide { max-width: 1560px; margin: 0 auto; padding: 0 28px 64px; }
+.container-wide {
+    /* 地图页需要更多横向空间，比其他页面用更宽的容器 */
+    max-width: 1920px;
+    margin: 0 auto;
+    padding: 0 20px 40px;
+}
+
+/* 地图页压缩页头，把纵向空间尽量留给地图（去掉副标题、缩小标题） */
+.container-wide .page-head {
+    margin-bottom: 14px;
+    align-items: center;
+}
+.container-wide .page-head h1 { font-size: 22px; }
+.container-wide .page-head .sub { font-size: 12.5px; margin-top: 3px; }
+.container-wide .page-head .btn-sm { padding: 6px 13px; font-size: 12.5px; }
 
 .map-layout {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 372px;
-    gap: 22px;
+    grid-template-columns: minmax(0, 1fr) 290px;
+    gap: 16px;
     align-items: start;
 }
 
-.map-main { padding: 16px; }
+.map-main {
+    padding: 14px;
+    border-radius: 18px;
+    border: 1px solid var(--border);
+    background: var(--surface-1);
+}
 
 .map-toolbar {
     display: flex;
@@ -424,95 +655,128 @@ document.getElementById('btn-publish').onclick = () => { location.href = 'publis
     justify-content: space-between;
     gap: 16px;
     flex-wrap: wrap;
-    margin-bottom: 13px;
+    margin-bottom: 12px;
 }
-.map-legend { display: flex; gap: 13px; flex-wrap: wrap; }
+.map-legend { display: flex; gap: 12px; flex-wrap: wrap; }
 .map-legend .lg {
     display: inline-flex; align-items: center; gap: 5px;
     font-size: 12px; color: var(--text-dim);
 }
 .map-legend .lg i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
-.map-stats { display: flex; gap: 15px; font-size: 13px; color: var(--text-dim); }
+.map-stats { display: flex; gap: 14px; font-size: 13px; color: var(--text-dim); }
 .map-stats b { color: var(--text); font-weight: 800; }
 .map-stats .l b { color: #fb7185; }
 .map-stats .f b { color: #22d3ee; }
 
-/* ---------- 地图舞台 ---------- */
+/* ---------- 地图舞台：宽高比锁死为底图比例，永不裁切 ---------- */
 .map-stage {
     position: relative;
-    width: 100%;
+    /* 关键：舞台与底图同比例（1700×1543），这样「铺满」与「不裁切」可以同时成立。
+       之前用固定 76vh 高度的宽扁舞台，宽度铺满后高度溢出 135%~147%，
+       底部（南体育场、材料科学大楼一带）被 overflow:hidden 裁掉，
+       视觉上就是用户反馈的「上半部分被截掉」。 */
     aspect-ratio: 1700 / 1543;
+    width: 100%;
+    /*
+     * 不设 max-height：舞台高度 = 宽度 / 1.1017，与底图完全同比例，
+     * contain 计算结果正好等于「铺满」，横向和纵向利用率都是 100%，
+     * 既没有左右黑边，也不会上下裁切（用户反馈的「被截掉」根因）。
+     * 若设了 max-height，舞台会变成宽扁形，contain 后左右留出大片黑边、
+     * 地图反而变小，并在顶部裁掉贴近边缘的图钉。
+     */
+    margin: 0 auto;
     overflow: hidden;
-    border-radius: var(--radius);
+    border-radius: 14px;
     border: 1px solid var(--border-strong);
-    background: #06090f;
+    background: radial-gradient(circle at 50% 40%, #0a1220, #05080f 70%);
     cursor: grab;
+    touch-action: none;              /* 关键：让浏览器把触摸手势交给我们 */
     user-select: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
 }
 .map-stage.grabbing { cursor: grabbing; }
-.map-stage > img {
+
+/* 舞台比地图宽时，用同图的大范围模糊版本填充左右留白。
+   这样「锁定比例不裁切」和「视觉上铺满」可以同时成立。 */
+.map-blur {
+    position: absolute;
+    inset: -8%;
+    width: 116%;
+    height: 116%;
+    object-fit: cover;
+    filter: blur(26px) brightness(.42) saturate(.85);
+    transform: scale(1.06);
+    pointer-events: none;
+    opacity: .85;
+}
+
+.map-world {
+    position: absolute;
+    left: 0; top: 0;
+    transform-origin: 0 0;
+    will-change: transform;
+}
+.map-world > img {
     position: absolute; inset: 0;
     width: 100%; height: 100%;
-    object-fit: contain;
-    transform-origin: 0 0;
+    display: block;
     pointer-events: none;
+    border-radius: 6px;
 }
 .map-layer {
     position: absolute; inset: 0;
-    transform-origin: 0 0;
-    pointer-events: none;
+    --pin-scale: 1;
 }
 
-/* 无物品的地点小点 */
+/* 无物品地点的小光点 */
 .mp-dot {
     position: absolute;
     width: 7px; height: 7px;
     margin: -3.5px 0 0 -3.5px;
     border-radius: 50%;
     background: var(--c);
-    opacity: .42;
+    opacity: .4;
     box-shadow: 0 0 0 1.5px rgba(0, 0, 0, .55);
+    pointer-events: none;
 }
 
 /* 有物品的图钉 */
 .mp-pin {
     position: absolute;
-    transform: translate(-50%, -100%) scale(var(--s));
+    transform: translate(-50%, -100%) scale(calc(var(--s) * var(--pin-scale)));
     transform-origin: bottom center;
     background: none; border: 0; padding: 0; box-shadow: none;
-    pointer-events: auto;
     cursor: pointer;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
+    display: flex; flex-direction: column; align-items: center;
+    -webkit-tap-highlight-color: transparent;
 }
 .mp-pin:hover { filter: none; box-shadow: none; }
 .mp-pin .pin-body {
-    width: 30px; height: 30px;
-    border-radius: 50% 50% 50% 4px;
+    width: 34px; height: 34px;
+    border-radius: 50% 50% 50% 5px;
     transform: rotate(-45deg);
     background: var(--c);
-    border: 2px solid rgba(255, 255, 255, .92);
+    border: 2px solid rgba(255, 255, 255, .93);
     box-shadow: 0 5px 16px -3px rgba(0, 0, 0, .85), 0 0 16px -4px var(--c);
     display: flex; align-items: center; justify-content: center;
 }
 .mp-pin .pin-body b {
     transform: rotate(45deg);
-    color: #fff; font-size: 12.5px; font-weight: 800;
+    color: #fff; font-size: 13px; font-weight: 800;
     text-shadow: 0 1px 2px rgba(0, 0, 0, .55);
 }
 .mp-pin.sel .pin-body {
     border-color: #fff;
-    box-shadow: 0 0 0 4px rgba(255, 255, 255, .28), 0 5px 18px -3px rgba(0, 0, 0, .9);
+    box-shadow: 0 0 0 5px rgba(255, 255, 255, .3), 0 5px 18px -3px rgba(0, 0, 0, .9);
 }
 
-/* 悬停气泡 */
+/* 悬停气泡（仅桌面） */
 .mp-pin .pin-tip {
     position: absolute;
     bottom: calc(100% + 7px);
     left: 50%;
-    transform: translateX(-50%) scale(calc(1 / var(--s)));
-    transform-origin: bottom center;
+    transform: translateX(-50%);
     background: rgba(8, 12, 22, .96);
     border: 1px solid var(--border-strong);
     border-radius: 9px;
@@ -521,43 +785,99 @@ document.getElementById('btn-publish').onclick = () => { location.href = 'publis
     opacity: 0;
     pointer-events: none;
     transition: opacity .14s var(--ease);
-    text-align: left;
     box-shadow: 0 10px 26px -8px rgba(0, 0, 0, .9);
 }
 .mp-pin:hover .pin-tip { opacity: 1; }
-.mp-pin .pin-tip b { display: block; font-size: 12.5px; color: var(--text); }
+.mp-pin .pin-tip b { display: block; font-size: 12.5px; color: var(--text); text-align: left; }
 .mp-pin .pin-tip i { font-style: normal; font-size: 11px; color: var(--text-mute); }
 
 .map-hint {
     position: absolute; left: 12px; bottom: 12px;
-    font-size: 11.5px; color: rgba(200, 215, 240, .5);
-    background: rgba(4, 6, 14, .72);
+    font-size: 11.5px; color: rgba(200, 215, 240, .55);
+    background: rgba(4, 6, 14, .75);
     padding: 5px 10px; border-radius: 8px;
     pointer-events: none;
     backdrop-filter: blur(6px);
+    z-index: 5;
 }
 
 .map-zoom {
     position: absolute; right: 12px; top: 12px;
     display: flex; flex-direction: column; gap: 5px;
+    z-index: 6;
 }
 .map-zoom button {
-    width: 32px; height: 32px;
-    border-radius: 9px;
+    width: 36px; height: 36px;
+    border-radius: 10px;
     border: 1px solid var(--border-strong);
-    background: rgba(8, 12, 22, .85);
+    background: rgba(8, 12, 22, .88);
     color: var(--text-dim);
-    font-size: 17px; font-weight: 700;
-    line-height: 1;
-    padding: 0;
+    font-size: 18px; font-weight: 700;
+    line-height: 1; padding: 0;
     box-shadow: 0 3px 12px rgba(0, 0, 0, .5);
     backdrop-filter: blur(8px);
     cursor: pointer;
 }
 .map-zoom button:hover { color: #fff; border-color: rgba(99, 102, 241, .7); filter: none; }
 
+/* ---------- 图钉弹窗 ---------- */
+.map-pop {
+    position: absolute;
+    right: 12px; bottom: 12px;
+    width: min(330px, calc(100% - 24px));
+    max-height: 62%;
+    display: none;
+    flex-direction: column;
+    background: rgba(8, 12, 22, .97);
+    border: 1px solid var(--border-strong);
+    border-radius: 14px;
+    box-shadow: 0 20px 50px -14px rgba(0, 0, 0, .95);
+    backdrop-filter: blur(14px);
+    z-index: 8;
+    overflow: hidden;
+}
+.map-pop.open { display: flex; animation: popIn .18s var(--ease); }
+@keyframes popIn {
+    from { opacity: 0; transform: translateY(8px) scale(.98); }
+    to { opacity: 1; transform: none; }
+}
+
+.pop-x {
+    position: absolute; right: 8px; top: 6px;
+    background: none; border: 0; box-shadow: none;
+    color: var(--text-mute);
+    font-size: 20px; line-height: 1;
+    padding: 2px 6px; cursor: pointer;
+    z-index: 2;
+}
+.pop-x:hover { color: #fff; filter: none; box-shadow: none; }
+
+#pop-body { padding: 13px 14px; overflow-y: auto; }
+.pop-head { display: flex; align-items: center; gap: 7px; padding-right: 22px; }
+.pop-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.pop-name { font-size: 15px; font-weight: 800; color: var(--text); }
+.pop-cat {
+    font-size: 11px; color: var(--text-mute);
+    border: 1px solid var(--border-strong);
+    border-radius: 20px; padding: 1px 8px;
+}
+.pop-stat { font-size: 12px; color: var(--text-mute); margin: 5px 0 11px; }
+
+.pop-list { display: flex; flex-direction: column; gap: 8px; }
+.pop-item {
+    display: block; text-decoration: none;
+    padding: 10px 11px; border-radius: 10px;
+    border: 1px solid var(--border);
+    background: rgba(0, 0, 0, .3);
+    transition: border-color .16s var(--ease), background .16s var(--ease);
+}
+.pop-item:hover { border-color: rgba(99, 102, 241, .6); background: rgba(99, 102, 241, .09); }
+.pi-top { display: flex; gap: 6px; margin-bottom: 5px; flex-wrap: wrap; }
+.pi-name { font-size: 13.5px; font-weight: 700; color: var(--text); margin-bottom: 3px; }
+.pi-meta { font-size: 11.5px; color: var(--text-mute); }
+
 /* ---------- 右侧 ---------- */
-.map-side { display: flex; flex-direction: column; gap: 18px; position: sticky; top: 84px; }
+.map-side { display: flex; flex-direction: column; gap: 16px; position: sticky; top: 82px; }
 .map-side .card { margin-bottom: 0; }
 .map-side .card-title { font-size: 15px; }
 
@@ -594,10 +914,9 @@ document.getElementById('btn-publish').onclick = () => { location.href = 'publis
     box-shadow: 0 0 0 3px color-mix(in srgb, var(--c) 14%, transparent);
 }
 
-/* 地点排行 */
 .place-row {
     width: 100%; display: grid;
-    grid-template-columns: 1fr 62px 30px;
+    grid-template-columns: 1fr 56px 28px;
     align-items: center; gap: 9px;
     background: none; border: 0; box-shadow: none;
     padding: 7px 6px; border-radius: 8px;
@@ -614,28 +933,57 @@ document.getElementById('btn-publish').onclick = () => { location.href = 'publis
 .place-row .pr-bar i { display: block; height: 100%; border-radius: 3px; background: var(--grad); }
 .place-row .pr-n { font-size: 12.5px; font-weight: 800; color: var(--text-dim); text-align: right; }
 
-/* 迷你物品卡 */
-.mini-item {
-    display: block; text-decoration: none;
-    padding: 11px 12px; border-radius: 10px;
-    border: 1px solid var(--border);
-    background: rgba(0, 0, 0, .22);
-    margin-bottom: 8px;
-    transition: border-color .16s var(--ease), background .16s var(--ease);
-}
-.mini-item:hover { border-color: rgba(99, 102, 241, .55); background: rgba(99, 102, 241, .07); }
-.mini-item .mi-top { display: flex; gap: 6px; margin-bottom: 6px; flex-wrap: wrap; }
-.mini-item .mi-name { font-size: 13.5px; font-weight: 700; color: var(--text); margin-bottom: 4px; }
-.mini-item .mi-meta {
-    font-size: 11.5px; color: var(--text-mute);
-    display: flex; align-items: center; gap: 4px;
-}
-.mini-item .mi-meta svg { width: 11px; height: 11px; }
-
+/* ---------- 手机端：地图铺满、弹窗变底部抽屉 ---------- */
 @media (max-width: 1180px) {
     .map-layout { grid-template-columns: 1fr; }
     .map-side { position: static; }
-    .container-wide { padding: 0 18px 48px; }
+    .container-wide { padding: 0 14px 40px; }
+}
+
+@media (max-width: 760px) {
+    .container-wide { padding: 0 10px 36px; }
+    .map-main { padding: 9px; border-radius: 14px; }
+    /*
+     * 手机端改为「高度优先」：固定高度、放弃 aspect-ratio，
+     * 由 JS 的 layout() 把 world 撑到 h*RATIO（比屏幕宽 ≈157%），
+     * 初始横向居中，用户可以单指左右拖动查看 —— 地图明显变大。
+     */
+    .map-stage {
+        aspect-ratio: auto;
+        height: 62vh;
+        min-height: 320px;
+        max-height: 640px;
+        border-radius: 12px;
+    }
+    .map-hint { font-size: 10.5px; padding: 4px 8px; left: 8px; bottom: 8px; }
+    .map-zoom { right: 8px; top: 8px; }
+    .map-zoom button { width: 34px; height: 34px; font-size: 17px; }
+    .map-toolbar { gap: 8px; margin-bottom: 8px; }
+    .map-legend { gap: 8px; }
+    .map-legend .lg { font-size: 10.5px; }
+    .map-stats { font-size: 12px; gap: 10px; }
+
+    /* 底部抽屉式弹窗，大拇指可达 */
+    .map-pop {
+        left: 0; right: 0; bottom: 0;
+        width: 100%;
+        max-height: 56%;
+        border-radius: 16px 16px 0 0;
+        border-left: 0; border-right: 0; border-bottom: 0;
+    }
+    .map-pop.open { animation: sheetIn .22s var(--ease); }
+    @keyframes sheetIn {
+        from { transform: translateY(100%); }
+        to { transform: none; }
+    }
+    #pop-body { padding: 12px 13px 18px; }
+    .pop-item { padding: 11px 12px; }
+
+    /* 纵向铺满并放大到 1.6 倍宽后，图钉要按比例缩小，否则会互相遮挡 */
+    .mp-pin .pin-body { width: 26px; height: 26px; }
+    .mp-pin .pin-body b { font-size: 11.5px; }
+    .mp-pin .pin-tip { display: none; }
+    .mp-dot { width: 6px; height: 6px; margin: -3px 0 0 -3px; }
 }
 </style>
 </body>
