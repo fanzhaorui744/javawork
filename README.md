@@ -1,161 +1,200 @@
-# 校园失物招领系统（Lost & Found）
+# 校园失物招领系统（Campus Lost & Found）
 
-Java 课程项目 · 乙方开发方交付物
-对应《01_软件需求说明书》《02_项目开发计划书》，实现必做功能 F1～F8 与扩展功能 E1～E4。
+> Java 课程项目 · 企业场景软件开发实践
+> 学号 **W124301024** ｜ 姓名 **范兆瑞**
 
-## 1. 环境要求
+一个面向校园场景的失物招领平台：失主发布「寻物」、拾取者发布「招领」，
+系统通过 **AI 疑似匹配** 辅助双方对接，并以 **认领申请 → 审核 → 归还 → 归档**
+的全流程追踪完成闭环。同时提供管理后台与数据统计，以及一个 Android WebView 壳 APK
+用于移动端演示。
 
-| 项目 | 要求 |
-|---|---|
-| JDK | Java 17（LTS，开发使用 Eclipse Temurin 17.0.20） |
-| 构建工具 | Maven 3.9+ |
-| 数据库 | 默认嵌入式 H2（MySQL 兼容模式，文件持久化，零安装）；可选 MySQL 8 |
-| 浏览器 | Chrome / Edge 最新版 |
+---
 
-> 默认配置使用嵌入式 H2 数据库文件（`./data/lostfound`），启动即用，重启数据不丢；
-> 与计划书一致的 MySQL 8 部署方式见第 4 节「可选：MySQL 8 配置」。
+## 一、功能范围
 
-## 2. 启动步骤
+### 必做功能 F1 ~ F8
 
-### 方式一：直接运行可执行 JAR（验收推荐）
+| 编号 | 功能 | 说明 |
+|:--|:--|:--|
+| F1 | 用户注册 / 登录 / 登出 | BCrypt 密码哈希，Session 会话 |
+| F2 | 发布失物 / 招领信息 | 必填校验、超长截断、非法类型拦截 |
+| F3 | 组合检索与分页 | 类型 + 类别 + 地点 + 关键词 + 时间范围 |
+| F4 | 认领申请与处理 | 申请 → 确认 / 拒绝 / 要求补充，状态联动 |
+| F5 | 物品状态机 | 待认领 → 认领处理中 → 已归还 / 已关闭 |
+| F6 | 管理后台 | 隐藏 / 恢复 / 删除 / 归档 + 处理记录留痕 |
+| F7 | 数据持久化 | 重启后数据不丢失 |
+| F8 | 统一异常处理 | 统一 `{code, message}` 结构与中文提示 |
 
-```bash
-java -jar lostfound.jar
-```
+### 扩展功能 E1 ~ E4
 
-启动成功后浏览器访问 <http://localhost:8080> 。
+| 编号 | 功能 | 说明 |
+|:--|:--|:--|
+| E1 | 物品图片上传 | JPG / PNG，≤ 5MB，UUID 重命名 |
+| E2 | AI 智能匹配与描述优化 | DeepSeek Chat API；未配置密钥时降级为本地算法 |
+| E3 | 站内定向通知 | 仅当事双方可见，不做全站广播 |
+| E4 | 数据统计 | 类别 TOP10 / 地点 TOP10 / 逐月趋势（GROUP BY 聚合） |
 
-- Windows 双击 `启动Windows.bat` 亦可。
-- 首次启动自动建表，并写入演示账号与演示数据（共 10 条跨类别、跨地点、跨月份的信息）。
-- 再次启动会复用已有数据库文件，数据完整保留（F7）。
+---
 
-### 方式二：源码构建运行
+## 二、技术栈
+
+| 层次 | 技术 |
+|:--|:--|
+| 语言 | Java 17 |
+| 框架 | Spring Boot 3.3.5、MyBatis-Plus 3.5.7 |
+| 构建 | Maven 3.9.9 |
+| 数据库 | 嵌入式 H2 2.2（MySQL 兼容模式，文件持久化至 `./data/lostfound`）<br>可选 MySQL 8（`application-mysql.yml` + `db/schema.sql`） |
+| 前端 | HTML5 + 原生 JavaScript + ECharts 5（本地引入，完全离线可用） |
+| AI | DeepSeek Chat API（OkHttp，10s 超时，失败重试 1 次，不可用时自动降级） |
+| 移动端 | Android WebView 壳 APK（minSdk 24 / targetSdk 34） |
+
+---
+
+## 三、快速开始
+
+### 1. 直接运行（推荐）
 
 ```bash
 mvn clean package
 java -jar target/lostfound.jar
 ```
 
-### 运行测试
+Windows 下也可直接双击 `启动Windows.bat`。启动后访问 <http://localhost:8080>。
+
+首次启动会自动建表并写入演示数据（20 条物品，覆盖 4 种状态与 6 个月历史）。
+
+### 2. 开发模式（改前端不用重启）
+
+```bash
+mvn spring-boot:run \
+  -Dspring-boot.run.arguments="--spring.web.resources.static-locations=file:./src/main/resources/static/ --spring.web.resources.cache.period=0"
+```
+
+### 3. 运行测试
 
 ```bash
 mvn test
 ```
 
-共 20 个测试：状态机单元测试（6）＋ 本地匹配算法测试（4）＋ API 集成测试（10），覆盖 F1～F8、E1～E4 主流程与异常分支。
+20 个自动化用例（单元测试 + MockMvc 接口测试）。另有端到端脚本 `e2e_test.sh`，
+覆盖 40+ 个接口断言。
 
-## 3. 配置方法
+### 4. 可选：MySQL 8
 
-### 3.1 DeepSeek API 密钥（E2 智能匹配）
-
-密钥**只放本地配置文件，不写入代码、不随提交物上交**：
-
-1. 在 `application.yml` 同目录新建 `application-local.yml`（已加入 .gitignore）：
-
-```yaml
-app:
-  deepseek:
-    api-key: sk-你的真实密钥
+```sql
+CREATE DATABASE lostfound;
 ```
 
-2. 启动时激活本地配置：`java -jar lostfound.jar --spring.profiles.active=local`
-   或通过环境变量：`set DEEPSEEK_API_KEY=sk-...` 后启动。
-
-**未配置密钥或 API 不可用时**：关键词推荐、描述优化、疑似匹配自动降级为本地算法，
-接口返回 `degraded=true`，页面明确提示「本地匹配结果，请谨慎核验」，其余功能不受影响。
-
-### 3.2 关键配置项（application.yml）
-
-| 配置 | 默认 | 说明 |
-|---|---|---|
-| `server.port` | 8080 | 服务端口 |
-| `app.upload-dir` | ./uploads | 物品图片存储目录 |
-| `app.demo-data` | true | 首次启动写入演示数据（幂等，表非空则跳过） |
-| `app.deepseek.timeout-seconds` | 10 | AI 调用超时（失败重试 1 次） |
-
-前端 API 基址集中在 `static/js/config.js`，前后端分离部署时只改这一处。
-
-## 4. 可选：MySQL 8 配置（与计划书 F7 技术选型一致）
+执行 `src/main/resources/db/schema.sql`，修改 `application-mysql.yml` 中的账号密码，然后：
 
 ```bash
-# 1. 建库（MySQL 8 客户端执行 db/schema.sql 前两句）
-CREATE DATABASE IF NOT EXISTS lostfound DEFAULT CHARACTER SET utf8mb4;
-USE lostfound;
-SOURCE db/schema.sql;
-
-# 2. 修改 src/main/resources/application-mysql.yml 中的账号密码
-
-# 3. 以 mysql 配置启动
-mvn spring-boot:run "-Dspring-boot.run.profiles=mysql"
+java -jar target/lostfound.jar --spring.profiles.active=mysql
 ```
 
-> 说明：五张表结构与计划书第 5 章一致；`claim_application` 的
-> 「同一用户同一物品仅一条处理中申请」由服务层校验，schema.sql 中附
-> MySQL 生成列唯一索引的可选兜底方案。
+### 5. 可选：配置 DeepSeek AI
 
-## 5. 示例数据（演示账号）
+**不要把密钥写进代码或提交到仓库。** 两种方式任选：
+
+- 新建 `src/main/resources/application-local.yml`，写入 `app.deepseek.api-key: sk-xxx`，
+  然后 `--spring.profiles.active=local,default` 启动；
+- 或设置环境变量 `DEEPSEEK_API_KEY=sk-xxx`。
+
+未配置时，AI 功能自动降级为本地关键词提取与相似度算法，页面会明确提示
+「AI 服务不可用，当前为本地匹配结果」，**属于允许的设计行为，不是缺陷**。
+
+---
+
+## 四、演示账号
 
 | 账号 | 密码 | 角色 | 用途 |
-|---|---|---|---|
-| admin | admin123 | 管理员 | 管理审核、隐藏/删除/归档、处理记录 |
-| alice | 123456 | 普通用户 | 演示失主 |
-| bob | 123456 | 普通用户 | 演示拾取者 |
-| carol | 123456 | 普通用户 | 第三方隔离验证（E3） |
+|:--|:--|:--|:--|
+| `admin` | `admin123` | 管理员 | 管理后台、内容治理、处理记录 |
+| `alice` | `123456` | 普通用户 | 失主视角 |
+| `bob` | `123456` | 普通用户 | 拾取者视角 |
+| `carol` | `123456` | 普通用户 | 第三方隔离验证 |
 
-> 以上均为课程演示用途的模拟账号，非真实密码。
+> 以上均为课程演示用途，非真实密码。
 
-核心验收场景一次走通：alice 发布招领 → bob 检索并提交认领申请 → alice 确认 →
-状态「待认领→认领处理中→已归还/已解决」，全程站内定向通知，第三人 carol 收不到任何相关通知。
+---
 
-## 6. 需求追踪一览
+## 五、演示路径（约 3 分钟）
 
-| SRS 编号 | 实现位置 |
-|---|---|
-| F1 用户与身份 | `UserController` / `LoginInterceptor` / `AdminInterceptor` / BCrypt |
-| F2 信息发布 | `ItemController` / `ItemService`（发布、编辑、撤回） |
-| F3 列表与搜索 | `ItemService.search`（MyBatis-Plus 组合条件 + 分页） |
-| F4 认领申请 | `ClaimController` / `ClaimService`（提交 + 确认/拒绝/要求补充） |
-| F5 状态流转 | `ItemStatus` 状态机（统一 transition 入口 + 单元测试全覆盖） |
-| F6 管理审核 | `AdminController` / `AdminService` / `AuditService` |
-| F7 数据保存 | H2 文件库（默认）/ MySQL 8（可选），五张表 |
-| F8 反馈与异常 | `GlobalExceptionHandler` 统一 {code, message}，无堆栈输出 |
-| E1 图片关联 | `POST /api/items/{id}/image`（jpg/png ≤ 5MB，UUID 重命名） |
-| E2 智能匹配 | `AiService`（OkHttp + DeepSeek）/ `MatchService.localScore` 降级 |
-| E3 站内通知 | `NotifyService`（当事用户定向、未读标记、按用户隔离） |
-| E4 数据统计 | `StatisticsMapper`（GROUP BY 聚合）+ ECharts 三图 |
+1. **未登录**打开首页 → 看到公开列表，无「发布信息」入口。
+2. `alice` 登录 → 发布一条「招领」，点「AI 优化描述」生成草稿。
+3. 退出，`bob` 登录 → 用组合筛选（类别 + 地点 + 关键词）找到该信息。
+4. 进入详情 → 点「AI 疑似匹配」查看 Top5 与相似理由 → 勾选完成人工核验 → 提交认领申请。
+5. `alice` 登录 → 通知页看到提醒 → 认领中心确认 → 物品状态变为「已归还」。
+6. `admin` 登录 → 管理后台隐藏一条信息、查看处理记录。
+7. 打开「统计」页 → 三张图表由数据库 GROUP BY 聚合生成。
+8. 重启服务 → 数据全部保留（F7）。
 
-## 7. 已知限制
+---
 
-1. **AI 功能依赖外部 DeepSeek API**：未配置密钥或断网时自动降级为本地算法（接口返回 `degraded=true`，页面有降级提示）。
-2. **Android APK**：本包未含 APK。APP 方案为 WebView 壳封装本 Web 版（计划书 R18），需 Android SDK 环境打包。
-3. **会话为服务端内存会话**：服务重启后需重新登录（业务数据持久化不受影响）。
-4. **性能按课程演示规模设计**：不承诺高并发，见 SRS 第 7 章。
-5. GitHub Pages 仅托管静态前端展示入口，完整功能演示在本机运行整套系统。
-
-## 8. AI 使用说明（课程合规要求）
-
-开发过程中使用 AI 辅助完成部分样板代码（实体类、前端页面）与调试；
-核心业务逻辑（状态机、认领流转、权限拦截、降级算法、聚合统计）均经本人逐行检查与测试验证，可现场讲解。
-
-## 9. 目录结构
+## 六、项目结构
 
 ```
 lostfound/
 ├── pom.xml
-├── db/schema.sql                  # 建库脚本（H2/MySQL 通用）
-├── e2e_test.sh                    # 端到端验证脚本（正常/异常/边界）
 ├── 启动Windows.bat
-├── src/main/java/com/example/lostfound/
-│   ├── entity/                    # User/ItemInfo/ClaimApplication/Notification/AuditRecord + 枚举
-│   ├── mapper/                    # MyBatis-Plus Mapper + 统计聚合 SQL
-│   ├── service/                   # 业务层（Item/Claim/Notify/Admin/Match/Ai/Statistics/User/Audit）
-│   ├── controller/                # REST 接口层
-│   ├── interceptor/               # 登录 / 管理员拦截器
-│   ├── config/                    # Web/MyBatisPlus 配置、演示数据初始化
-│   └── common/                    # 统一返回、业务异常、全局异常处理、会话工具
-├── src/main/resources/
-│   ├── application.yml            # 默认配置（H2 文件库）
-│   ├── application-mysql.yml      # 可选 MySQL 8 配置
-│   └── static/                    # 前端页面（HTML + 原生 JS + ECharts）
-└── src/test/java/                 # JUnit 5 单元测试与 MockMvc 集成测试
+├── e2e_test.sh                       # 端到端接口验证脚本
+├── docs/screenshots/                 # 界面截图
+├── tools/shot.js                     # 用 CDP 批量截图的工具
+└── src/
+    ├── main/
+    │   ├── java/com/example/lostfound/
+    │   │   ├── common/               # Result、BizException、全局异常处理
+    │   │   ├── config/               # MyBatis-Plus、Web、演示数据初始化
+    │   │   ├── controller/           # 8 个 REST 控制器
+    │   │   ├── dto/                  # 请求对象与校验注解
+    │   │   ├── entity/               # 实体与状态枚举
+    │   │   ├── interceptor/          # 登录 / 管理员拦截器
+    │   │   ├── mapper/               # MyBatis-Plus Mapper 与统计 SQL
+    │   │   └── service/              # 9 个业务服务
+    │   └── resources/
+    │       ├── application.yml
+    │       ├── application-mysql.yml
+    │       ├── db/schema.sql
+    │       └── static/               # 前端：8 个页面 + css + js
+    └── test/java/com/example/lostfound/
+        ├── ItemStatusTest.java       # 状态机单元测试
+        ├── LocalScoreTest.java       # 本地匹配算法测试
+        └── ApiIntegrationTest.java   # MockMvc 接口集成测试
 ```
+
+---
+
+## 七、界面预览
+
+| 信息广场 | 数据统计 |
+|:--|:--|
+| ![信息广场](docs/screenshots/01_信息广场_首页.png) | ![数据统计](docs/screenshots/03_数据统计.png) |
+
+| 发布信息 | 信息详情 + AI 匹配 |
+|:--|:--|
+| ![发布信息](docs/screenshots/05_发布信息.png) | ![详情](docs/screenshots/06_信息详情_AI匹配.png) |
+
+| 管理后台 | 移动端 |
+|:--|:--|
+| ![管理后台](docs/screenshots/09_管理后台.png) | ![移动端](docs/screenshots/10_移动端_信息广场.png) |
+
+---
+
+## 八、已知限制
+
+1. AI 功能依赖外部 DeepSeek API，不可用时降级为本地算法；
+2. Android APK 为 WebView 壳，内嵌离线数据用于演示，不连接真实后端；
+3. 会话保存在服务端内存，重启需重新登录（业务数据持久化，不丢失）；
+4. 性能按课程演示规模设计，未针对高并发优化。
+
+---
+
+## 九、交付物
+
+| 序号 | 文件 | 说明 |
+|:--|:--|:--|
+| 01 | `01_软件需求说明书.pdf` / `.docx` | 需求规格说明（SRS） |
+| 02 | `02_项目开发计划书.pdf` / `.docx` | 开发计划、里程碑与风险 |
+| 03 | `03_测试与迭代报告.pdf` | 测试用例、缺陷清单、追踪表 |
+| 04 | `产品说明书_W124301024_范兆瑞.pdf` | 安装部署与使用手册 |
+| 05 | `演示材料.pdf` | 现场演示脚本 |
+| 06 | 源码 + APK | 本仓库 / `apk/` 目录 |
