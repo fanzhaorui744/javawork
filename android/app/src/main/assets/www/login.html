@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#04060e">
+    <title>登录 / 注册 · 校园失物招领</title>
+    <link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/mobile-shell.css">
+    <script>window.OFFLINE_MODE = true;</script>
+    <script src="js/offline.js"></script>
+</head>
+<body>
+<div class="nav" id="nav"></div>
+
+<div class="login-wrap">
+    <div class="login-shell">
+
+        <!-- 左侧品牌区 -->
+        <aside class="login-aside">
+            <h2>连接每一次<br>遗失与重逢</h2>
+            <p>
+                校园失物招领平台，用 AI 智能匹配帮你快速找回丢失物品，
+                也让每一份善意都能准确送达。
+            </p>
+            <div class="login-feats">
+                <div class="login-feat">
+                    <span class="tick" id="t1"></span>
+                    <span><b>AI 疑似匹配</b>　自动比对相似物品，附相似理由</span>
+                </div>
+                <div class="login-feat">
+                    <span class="tick" id="t2"></span>
+                    <span><b>全流程追踪</b>　发布 → 认领 → 归还，状态全程留痕</span>
+                </div>
+                <div class="login-feat">
+                    <span class="tick" id="t3"></span>
+                    <span><b>定向站内通知</b>　只通知当事双方，不做全站广播</span>
+                </div>
+            </div>
+        </aside>
+
+        <!-- 右侧表单区 -->
+        <section class="login-form-side">
+            <div class="tabs">
+                <button id="tab-login" class="active" onclick="switchTab('login')">登录</button>
+                <button id="tab-register" onclick="switchTab('register')">注册</button>
+            </div>
+
+            <!-- 登录 -->
+            <form id="form-login" onsubmit="return doLogin(event)">
+                <div class="form-grid">
+                    <div class="field">
+                        <label for="login-username">用户名</label>
+                        <input id="login-username" required maxlength="20" autocomplete="username" placeholder="请输入用户名">
+                    </div>
+                    <div class="field">
+                        <label for="login-password">密码</label>
+                        <input id="login-password" type="password" required maxlength="64" autocomplete="current-password" placeholder="请输入密码">
+                    </div>
+                </div>
+                <div class="mt-24">
+                    <button type="submit" class="btn-block btn-lg" id="btn-login">登录</button>
+                </div>
+            </form>
+
+            <!-- 注册 -->
+            <form id="form-register" style="display:none" onsubmit="return doRegister(event)">
+                <div class="form-grid">
+                    <div class="field">
+                        <label for="reg-username">用户名 <span class="hint">（3~20 字符）</span></label>
+                        <input id="reg-username" required minlength="3" maxlength="20" placeholder="设置登录用户名">
+                    </div>
+                    <div class="field">
+                        <label for="reg-password">密码 <span class="hint">（6~64 字符）</span></label>
+                        <input id="reg-password" type="password" required minlength="6" maxlength="64" placeholder="设置登录密码">
+                    </div>
+                    <div class="field">
+                        <label for="reg-nickname">昵称</label>
+                        <input id="reg-nickname" required maxlength="20" placeholder="展示给其他用户的名字">
+                    </div>
+                    <div class="field">
+                        <label for="reg-contact">联系方式 <span class="hint">（选填）</span></label>
+                        <input id="reg-contact" maxlength="50" placeholder="手机号 / 微信号">
+                    </div>
+                </div>
+                <div class="mt-24">
+                    <button type="submit" class="btn-green btn-block btn-lg">注册并登录</button>
+                </div>
+            </form>
+
+            <!-- 演示账号快捷入口 -->
+            <div class="demo-accounts">
+                <div class="caption">演示账号 · 点击自动填充</div>
+                <div class="demo-chips" id="demo-chips"></div>
+            </div>
+        </section>
+    </div>
+</div>
+
+<script src="js/config.js"></script>
+<script src="js/api.js"></script>
+<script src="js/common.js"></script>
+<script>
+document.getElementById('t1').innerHTML = ICON.check;
+document.getElementById('t2').innerHTML = ICON.check;
+document.getElementById('t3').innerHTML = ICON.check;
+
+const DEMO = [
+    { u: 'alice', p: '123456', label: '失主' },
+    { u: 'bob', p: '123456', label: '拾取者' },
+    { u: 'carol', p: '123456', label: '第三方' },
+    { u: 'admin', p: 'admin123', label: '管理员' },
+];
+
+document.getElementById('demo-chips').innerHTML = DEMO.map(d =>
+    `<button type="button" class="demo-chip" onclick="fillDemo('${d.u}','${d.p}')">
+        <b>${d.u}</b> · ${d.label}
+    </button>`).join('');
+
+function fillDemo(u, p) {
+    switchTab('login');
+    document.getElementById('login-username').value = u;
+    document.getElementById('login-password').value = p;
+    document.getElementById('login-username').focus();
+}
+
+function switchTab(which) {
+    const isLogin = which === 'login';
+    document.getElementById('form-login').style.display = isLogin ? '' : 'none';
+    document.getElementById('form-register').style.display = isLogin ? 'none' : '';
+    document.getElementById('tab-login').classList.toggle('active', isLogin);
+    document.getElementById('tab-register').classList.toggle('active', !isLogin);
+}
+
+function redirectTarget() {
+    const q = new URLSearchParams(location.search);
+    const r = q.get('redirect');
+    /* 只允许站内相对路径，避免开放重定向 */
+    if (!r || /^https?:/i.test(r) || r.startsWith('//')) return 'index.html';
+    return r;
+}
+
+async function doLogin(e) {
+    e.preventDefault();
+    const btn = document.getElementById('btn-login');
+    const label = btn.textContent;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span> 登录中…';
+    try {
+        const u = await api.post('/api/user/login', {
+            username: document.getElementById('login-username').value.trim(),
+            password: document.getElementById('login-password').value,
+        });
+        toast('登录成功，欢迎 ' + u.nickname);
+        setTimeout(() => { location.href = redirectTarget(); }, 350);
+    } catch (err) {
+        if (!err.handled) toast(err.message, false);
+        btn.disabled = false;
+        btn.textContent = label;
+    }
+    return false;
+}
+
+async function doRegister(e) {
+    e.preventDefault();
+    try {
+        await api.post('/api/user/register', {
+            username: document.getElementById('reg-username').value.trim(),
+            password: document.getElementById('reg-password').value,
+            nickname: document.getElementById('reg-nickname').value.trim(),
+            contact: document.getElementById('reg-contact').value.trim(),
+        });
+        toast('注册成功，请使用新账号登录');
+        switchTab('login');
+        document.getElementById('login-username').value = document.getElementById('reg-username').value.trim();
+        document.getElementById('login-password').value = '';
+        document.getElementById('login-password').focus();
+    } catch (err) {
+        if (!err.handled) toast(err.message, false);
+    }
+    return false;
+}
+
+(async () => {
+    await loadUser();
+    renderNav('login.html');
+    const reason = new URLSearchParams(location.search).get('reason');
+    if (reason === 'auth') {
+        setTimeout(() => toast('请先登录后再进行该操作', false), 300);
+    }
+})();
+</script>
+</body>
+</html>

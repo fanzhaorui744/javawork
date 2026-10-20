@@ -1,0 +1,169 @@
+plugins {
+    id 'com.android.application'
+}
+
+// ---------------------------------------------------------------------------
+// 从 local.properties / 环境变量读取 DeepSeek 配置。
+// 密钥只经由 buildConfigField 编入 BuildConfig（最终落在 classes.dex），
+// 不会写进 assets，也不会打印到构建日志。
+// ---------------------------------------------------------------------------
+def localProps = new Properties()
+def localPropsFile = rootProject.file('local.properties')
+if (localPropsFile.exists()) {
+    localPropsFile.withInputStream { localProps.load(new InputStreamReader(it, 'UTF-8')) }
+}
+
+def dsKey = (localProps.getProperty('DEEPSEEK_API_KEY')
+        ?: System.getenv('DEEPSEEK_API_KEY') ?: '').trim()
+def dsBase = (localProps.getProperty('DEEPSEEK_BASE_URL')
+        ?: System.getenv('DEEPSEEK_BASE_URL') ?: 'https://api.deepseek.com').trim()
+
+android {
+    namespace 'com.example.lostfound'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId 'com.example.lostfound'
+        minSdk 24
+        targetSdk 34
+        versionCode 1
+        versionName '1.0.0'
+
+        buildConfigField 'String', 'DEEPSEEK_API_KEY', '"' + dsKey.replace('\\', '\\\\').replace('"', '\\"') + '"'
+        buildConfigField 'String', 'DEEPSEEK_BASE_URL', '"' + dsBase.replace('\\', '\\\\').replace('"', '\\"') + '"'
+    }
+
+    buildFeatures {
+        buildConfig true
+    }
+
+    buildTypes {
+        debug {
+            minifyEnabled false
+            debuggable true
+        }
+        release {
+            minifyEnabled false
+            // 课程演示使用 debug 签名，可直接安装
+            signingConfig signingConfigs.debug
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    lint {
+        abortOnError false
+        checkReleaseBuilds false
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Web 资源同步：把 Spring Boot 项目的 static 目录 + 本工程的增量资源
+// （web-extra，含 offline.js / echarts.min.js）合并进 app/src/main/assets/www。
+//
+// 每次构建都重新同步，因此前端 UI 重构后只需重新执行 assembleDebug 即可打包最新页面。
+// 同步后自动做两件事，避免页面重构后漏掉离线脚本：
+//   1) 每个 *.html 若没有引用 js/offline.js，则在 </head> 前注入 OFFLINE_MODE + offline.js；
+//   2) 把任意 CDN 的 echarts 引用替换成本地 js/echarts.min.js。
+// ---------------------------------------------------------------------------
+def webSrcDir = file(project.findProperty('webSrc') ?: 'E:/java/lostfound/src/main/resources/static')
+def webExtraDir = rootProject.file('web-extra')
+def wwwDir = file("$projectDir/src/main/assets/www")
+
+tasks.register('syncWebAssets') {
+    group = 'build'
+    description = '把 Web 前端资源同步到 app/src/main/assets/www（含离线增强脚本）'
+    outputs.dir(wwwDir)
+    outputs.upToDateWhen { false }
+
+    doLast {
+        if (!webSrcDir.exists()) {
+            throw new GradleException("Web 源目录不存在：${webSrcDir}")
+        }
+        delete wwwDir
+        wwwDir.mkdirs()
+
+        // 只复制 css/、js/ 与顶层 *.html，保留原有目录结构
+        copy {
+            from(webSrcDir) {
+                include '*.html'
+                include 'css/**'
+                include 'js/**'
+                exclude '**/*.map'
+            }
+            into wwwDir
+        }
+        // 增量资源覆盖（offline.js、echarts.min.js 等）
+        if (webExtraDir.exists()) {
+            copy {
+                from(webExtraDir)
+                into wwwDir
+            }
+        }
+
+        // ---- HTML 后处理 ----
+        // offline.js 必须早于 api.js/common.js 执行才能接管 fetch，因此放在 </head> 末尾；
+        // mobile-shell.css 追加在 </head> 前，仅窄屏生效，修正网页在手机上的横向溢出。
+        def offlineTags = '<link rel="stylesheet" href="css/mobile-shell.css">\n' +
+                '    <script>window.OFFLINE_MODE = true;</script>\n' +
+                '    <script src="js/offline.js"></script>'
+        int patched = 0
+        wwwDir.eachFileRecurse { f ->
+            if (!f.isFile() || !f.name.toLowerCase().endsWith('.html')) {
+                return
+            }
+            String text = f.getText('UTF-8')
+            String original = text
+
+            // 1) CDN echarts -> 本地
+            text = text.replaceAll(/(?i)https?:\/\/[^"'\s>]*echarts[^"'\s>]*\.js/, 'js/echarts.min.js')
+
+            // 2) 注入离线脚本与移动端兜底样式
+            def needsOffline = !text.contains('js/offline.js')
+            def needsMobileCss = !text.contains('css/mobile-shell.css')
+            def tags = (needsMobileCss ? '<link rel="stylesheet" href="css/mobile-shell.css">\n    ' : '') +
+                    (needsOffline ? '<script>window.OFFLINE_MODE = true;</script>\n    ' +
+                            '<script src="js/offline.js"></script>' : '')
+            if (tags.trim()) {
+                if (text.contains('</head>')) {
+                    text = text.replaceFirst(/(?i)<\/head>/, tags + '\n</head>')
+                } else {
+                    text = tags + '\n' + text
+                }
+            }
+
+            if (!text.equals(original)) {
+                f.setText(text, 'UTF-8')
+                patched++
+            }
+        }
+
+        def htmlCount = 0
+        def jsCount = 0
+        wwwDir.eachFileRecurse { f ->
+            if (f.isFile()) {
+                if (f.name.endsWith('.html')) htmlCount++
+                if (f.name.endsWith('.js')) jsCount++
+            }
+        }
+        println "syncWebAssets: 源=${webSrcDir}"
+        println "syncWebAssets: 目标=${wwwDir}（html ${htmlCount} 个，js ${jsCount} 个，改写页面 ${patched} 个）"
+        if (!file("$wwwDir/js/echarts.min.js").exists()) {
+            println "syncWebAssets: 警告 —— js/echarts.min.js 缺失，统计页图表将不可用"
+        }
+        if (!file("$wwwDir/js/offline.js").exists()) {
+            println "syncWebAssets: 警告 —— js/offline.js 缺失，离线演示将不可用"
+        }
+    }
+}
+
+tasks.named('preBuild') {
+    dependsOn 'syncWebAssets'
+}
+
+if (!dsKey) {
+    logger.warn('[lostfound] 未在 local.properties 中找到 DEEPSEEK_API_KEY，AI 桥将自动降级为本地算法。')
+}

@@ -1,0 +1,51 @@
+/* =============================================================================
+ * mobile-shell.css —— 仅供 Android WebView 壳使用的移动端兜底样式
+ * -----------------------------------------------------------------------------
+ * 只在窄屏（<=480px）生效，用于修正宽屏网页在手机上的横向溢出：
+ *   - 表单双列 / 详情图文栏的 min-width 固定值会撑破 360~420dp 屏幕
+ *   - 长英文串、大图、表格可能撑宽 body
+ * 不影响桌面浏览器显示，也不覆盖任何配色与组件样式。
+ * ========================================================================== */
+
+html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+}
+
+@media (max-width: 480px) {
+    html,
+    body {
+        max-width: 100%;
+        overflow-x: hidden;
+    }
+
+    img,
+    svg,
+    video,
+    canvas,
+    table {
+        max-width: 100%;
+    }
+
+    /* 双列表单在手机上改为单列，避免 150px min-width × 2 + 间距撑破屏幕 */
+    .form-row > div {
+        min-width: 0;
+    }
+
+    /* 详情页图文栏 min-width:240px 在 360dp 上会溢出 */
+    .detail-hero .info {
+        min-width: 0;
+    }
+
+    /* 长链接 / 长英文串强制换行 */
+    .item-detail-desc,
+    .claim-box p {
+        overflow-wrap: anywhere;
+        word-break: break-word;
+    }
+}
+
+/* WebView 壳内禁用长按选中的蓝色高亮，更接近原生观感 */
+.native-shell * {
+    -webkit-tap-highlight-color: transparent;
+}

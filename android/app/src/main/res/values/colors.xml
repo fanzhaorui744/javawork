@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 深色科技感品牌色板：与前端新 UI 的底色保持一致，避免启动图跳色 -->
+    <color name="brand_bg">#0B0F18</color>
+    <color name="brand_bg_elevated">#121A28</color>
+    <color name="brand_text">#E8EEF9</color>
+    <color name="brand_text_dim">#8FA0BC</color>
+    <color name="brand_text_faint">#55647F</color>
+    <color name="brand_accent">#3DE0B0</color>
+    <color name="brand_accent_blue">#4F8BFF</color>
+</resources>

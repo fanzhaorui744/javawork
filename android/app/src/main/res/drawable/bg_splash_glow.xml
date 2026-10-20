@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 启动图背景光晕：顶部冷蓝、底部近黑，营造深色科技感 -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape android:shape="rectangle">
+            <gradient
+                android:angle="270"
+                android:startColor="#16233A"
+                android:centerColor="#0D1524"
+                android:endColor="#080B12"
+                android:type="linear" />
+        </shape>
+    </item>
+    <item android:gravity="top">
+        <shape android:shape="rectangle">
+            <gradient
+                android:type="radial"
+                android:gradientRadius="420dp"
+                android:centerX="0.5"
+                android:centerY="0.35"
+                android:startColor="#55224B8C"
+                android:endColor="#00000000" />
+        </shape>
+    </item>
+</layer-list>

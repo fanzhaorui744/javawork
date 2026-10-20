@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#04060e">
+    <title>认领中心 · 校园失物招领</title>
+    <link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/mobile-shell.css">
+    <script>window.OFFLINE_MODE = true;</script>
+    <script src="js/offline.js"></script>
+</head>
+<body>
+<div class="nav" id="nav"></div>
+
+<div class="container">
+    <div class="page-head">
+        <div>
+            <h1>认领中心</h1>
+            <div class="sub">管理与查看你的认领申请，处理他人的认领请求</div>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2 class="card-title">
+            <span class="ico-chip" id="ico-in"></span>
+            发给我的认领申请
+        </h2>
+        <div id="incoming"><p class="muted">加载中…</p></div>
+    </div>
+
+    <div class="card">
+        <h2 class="card-title">
+            <span class="ico-chip" id="ico-out"></span>
+            我发起的认领申请
+        </h2>
+        <div id="mine"><p class="muted">加载中…</p></div>
+    </div>
+</div>
+
+<script src="js/config.js"></script>
+<script src="js/api.js"></script>
+<script src="js/common.js"></script>
+<script>
+document.getElementById('ico-in').innerHTML = ICON.inbox;
+document.getElementById('ico-out').innerHTML = ICON.file;
+
+async function load() {
+    const data = await api.get('/api/claims');
+
+    /* ---- 发给我的 ---- */
+    const inc = document.getElementById('incoming');
+    const incoming = data.incoming || [];
+    inc.innerHTML = incoming.length ? incoming.map(x => `
+        <div class="claim-box">
+            <div class="flex items-center gap-8 flex-wrap" style="margin-bottom:8px">
+                <b>${esc(x.applicant)}</b>
+                <span class="muted" style="font-size:13px">申请认领</span>
+                <a href="item.html?id=${x.item.id}">「${esc(x.item.name)}」</a>
+                ${claimStatusBadge(x.claim.status)}
+            </div>
+            <p class="item-detail-desc">${esc(x.claim.description)}</p>
+            ${x.claim.handleNote
+                ? `<p class="muted" style="font-size:12.5px">处理意见：${esc(x.claim.handleNote)}</p>` : ''}
+            ${x.claim.status === 'PENDING'
+                ? `<a class="btn btn-green btn-sm" href="item.html?id=${x.item.id}" style="margin-top:8px">
+                       ${ICON.check} 去处理
+                   </a>` : ''}
+        </div>`).join('') : emptyState('暂无人向您发起认领申请', 'inbox');
+
+    /* ---- 我发起的 ---- */
+    const mine = document.getElementById('mine');
+    const myList = data.mine || [];
+    mine.innerHTML = myList.length ? myList.map(x => `
+        <div class="claim-box">
+            <div class="flex items-center gap-8 flex-wrap" style="margin-bottom:8px">
+                <span class="muted" style="font-size:13px">我申请认领</span>
+                <a href="item.html?id=${x.item.id}">「${esc(x.item.name)}」</a>
+                ${claimStatusBadge(x.claim.status)}
+            </div>
+            <p class="item-detail-desc">${esc(x.claim.description)}</p>
+            ${x.claim.handleNote
+                ? `<p class="muted" style="font-size:12.5px">处理意见：${esc(x.claim.handleNote)}</p>` : ''}
+        </div>`).join('') : emptyState('您还没有发起过认领申请', 'inbox');
+}
+
+(async () => {
+    if (!await requireLogin('claims.html')) return;
+    renderNav('claims.html');
+    try {
+        await load();
+    } catch (e) {
+        if (!e.handled) toast(e.message, false);
+    }
+})();
+</script>
+</body>
+</html>

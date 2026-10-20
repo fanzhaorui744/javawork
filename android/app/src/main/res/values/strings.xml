@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">校园失物招领</string>
+    <string name="splash_title">校园失物招领</string>
+    <string name="splash_subtitle">CAMPUS LOST &amp; FOUND</string>
+    <string name="splash_footer">离线演示版 · 数据仅存于本机</string>
+</resources>
