@@ -53,6 +53,7 @@ function renderNav(activeKey) {
         const isAdmin = CURRENT_USER.role === 'ADMIN';
         links =
             navItem('index.html', '信息广场', page) +
+            navItem('map.html', '校区地图', page) +
             navItem('publish.html', '发布信息', page) +
             navItem('claims.html', '认领中心', page);
         right =
@@ -67,7 +68,8 @@ function renderNav(activeKey) {
             ${navItem('stats.html', '统计', page)}
             <a class="nav-link" href="#" onclick="logout();return false;">退出</a>`;
     } else {
-        links = navItem('index.html', '信息广场', page);
+        links = navItem('index.html', '信息广场', page) +
+                navItem('map.html', '校区地图', page);
         right =
             `${navItem('stats.html', '数据统计', page)}
              <a class="btn btn-sm" href="login.html">登录 / 注册</a>`;
@@ -75,8 +77,11 @@ function renderNav(activeKey) {
 
     el.innerHTML =
         `<a class="brand" href="index.html">
-            <span class="logo-mark">${ICON.logo}</span>
-            <span>校园失物招领</span>
+            <img class="ahu-logo" src="img/ahu-logo-light.svg" alt="安徽大学">
+            <span class="brand-text">
+                <b>校园失物招领</b>
+                <i>安徽大学 · 磬苑校区</i>
+            </span>
         </a>
         <button class="nav-toggle" aria-label="菜单" onclick="document.getElementById('nav').classList.toggle('open')">${ICON.menu}</button>
         ${links}

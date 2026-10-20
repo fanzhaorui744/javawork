@@ -175,8 +175,9 @@ async function main() {
                     return j.code === 0 ? 'OK:' + j.data.nickname : 'ERR:' + j.message;
                 })()
             `);
-            console.log(`  登录 ${u} -> ${r}`);
-            return r && r.startsWith('OK');
+            const text = (r && typeof r === 'object') ? String(r.value ?? r) : String(r ?? '');
+            console.log(`  登录 ${u} -> ${text}`);
+            return text.startsWith('OK');
         }
 
         /* ---------- 1. 公开页面 ---------- */
@@ -197,26 +198,50 @@ async function main() {
         await goto(BASE + '/index.html');
         await shot('04_信息广场_已登录');
 
+        await goto(BASE + '/map.html');
+        await sleep(1500);
+        await shot('05_校区地图');
+
         await goto(BASE + '/publish.html');
-        await shot('05_发布信息');
+        await shot('06_发布信息');
 
         await goto(BASE + '/item.html?id=8');
         await evaluate('window.aiMatch ? aiMatch() : null');
         await sleep(2800);
-        await shot('06_信息详情_AI匹配');
+        await shot('07_信息详情_AI匹配');
+
+        /* 感谢接力：alice 认领的招领已确认，可见拾取者联系方式 */
+        await goto(BASE + '/item.html?id=1');
+        await sleep(1200);
+        if (process.env.DEBUG_PICKUP) {
+            console.log('    [dbg] ITEM =', await evaluate('ITEM ? ITEM.id + "/" + ITEM.type + "/" + ITEM.publisherId : "null"'));
+            console.log('    [dbg] CURRENT_USER =', await evaluate('CURRENT_USER ? CURRENT_USER.id + ":" + CURRENT_USER.username : "null"'));
+            console.log('    [dbg] isOwner =', await evaluate('typeof isOwner === "function" ? isOwner() : "no fn"'));
+            console.log('    [dbg] itemId =', await evaluate('"[" + itemId() + "]"'));
+            console.log('    [dbg] card display =', await evaluate('document.getElementById("pickup-card") ? document.getElementById("pickup-card").style.display : "no el"'));
+            console.log('    [dbg] body len =', await evaluate('document.getElementById("pickup-body") ? document.getElementById("pickup-body").innerHTML.length : "no el"'));
+            console.log('    [dbg] claims =', await evaluate(`
+                (async () => {
+                    const r = await fetch('/api/claims', {credentials: 'same-origin'});
+                    const j = await r.json();
+                    if (j.code !== 0) return 'ERR ' + j.message;
+                    return JSON.stringify((j.data.mine||[]).map(v => v.claim.id + '@' + (v.item&&v.item.id) + ':' + v.claim.status));
+                })()`));
+        }
+        await shot('08_拾取者联系方式');
 
         await goto(BASE + '/claims.html');
-        await shot('07_认领中心');
+        await shot('09_认领中心');
 
         await goto(BASE + '/notifications.html');
-        await shot('08_站内通知');
+        await shot('10_站内通知');
 
         /* ---------- 3. 管理员 ---------- */
         console.log('截图中（admin）...');
         await loginAs('admin', 'admin123');
 
         await goto(BASE + '/admin.html');
-        await shot('09_管理后台');
+        await shot('11_管理后台');
 
         /* ---------- 4. 移动端 ---------- */
         console.log('截图中（移动端）...');
@@ -228,14 +253,14 @@ async function main() {
         await sleep(1000);
         /* 移动端只截首屏，避免超长图 */
         let s = await cdp.send('Page.captureScreenshot', { format: 'png' });
-        fs.writeFileSync(path.join(OUT, '10_移动端_信息广场.png'), Buffer.from(s.data, 'base64'));
-        console.log('  ✓ 10_移动端_信息广场.png');
+        fs.writeFileSync(path.join(OUT, '12_移动端_信息广场.png'), Buffer.from(s.data, 'base64'));
+        console.log('  ✓ 12_移动端_信息广场.png');
 
         await goto(BASE + '/login.html');
         await sleep(600);
         s = await cdp.send('Page.captureScreenshot', { format: 'png' });
-        fs.writeFileSync(path.join(OUT, '11_移动端_登录.png'), Buffer.from(s.data, 'base64'));
-        console.log('  ✓ 11_移动端_登录.png');
+        fs.writeFileSync(path.join(OUT, '13_移动端_登录.png'), Buffer.from(s.data, 'base64'));
+        console.log('  ✓ 13_移动端_登录.png');
 
         /* 移动端汉堡菜单展开态 */
         await goto(BASE + '/index.html');
@@ -243,8 +268,15 @@ async function main() {
         await evaluate("document.getElementById('nav').classList.add('open')");
         await sleep(500);
         s = await cdp.send('Page.captureScreenshot', { format: 'png' });
-        fs.writeFileSync(path.join(OUT, '12_移动端_导航展开.png'), Buffer.from(s.data, 'base64'));
-        console.log('  ✓ 12_移动端_导航展开.png');
+        fs.writeFileSync(path.join(OUT, '14_移动端_导航展开.png'), Buffer.from(s.data, 'base64'));
+        console.log('  ✓ 14_移动端_导航展开.png');
+
+        /* 移动端地图页 */
+        await goto(BASE + '/map.html');
+        await sleep(1800);
+        s = await cdp.send('Page.captureScreenshot', { format: 'png' });
+        fs.writeFileSync(path.join(OUT, '15_移动端_校区地图.png'), Buffer.from(s.data, 'base64'));
+        console.log('  ✓ 15_移动端_校区地图.png');
 
         console.log('\n全部完成 ->', OUT);
     } finally {

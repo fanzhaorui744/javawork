@@ -287,7 +287,7 @@ function check(name, cond, extra) {
   check('已关闭不出现在公开列表', !r.data.list.some(i => i.id === tmpId));
 
   console.log('\n=== 12. 持久化 ===');
-  const snapshot = sandbox.localStorage.getItem('lostfound.offline.v3');
+  const snapshot = sandbox.localStorage.getItem('lostfound.offline.v5');
   check('状态已写入 localStorage', !!snapshot && snapshot.length > 1000, snapshot ? snapshot.length : 0);
   check('localStorage 不含 passwordHash 字段', !snapshot || snapshot.indexOf('"passwordHash"') < 0);
 

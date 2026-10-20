@@ -38,6 +38,8 @@ public class ItemController {
         item.setDescription(req.getDescription());
         item.setContact(req.getContact());
         item.setImagePath(req.getImagePath());
+        item.setMapX(req.getMapX());
+        item.setMapY(req.getMapY());
         return Result.ok(itemService.create(u, item));
     }
 
@@ -82,6 +84,8 @@ public class ItemController {
         changes.setDescription(req.getDescription());
         changes.setContact(req.getContact());
         changes.setImagePath(req.getImagePath());
+        changes.setMapX(req.getMapX());
+        changes.setMapY(req.getMapY());
         return Result.ok(itemService.update(id, u, changes));
     }
 

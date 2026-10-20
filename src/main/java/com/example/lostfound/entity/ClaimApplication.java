@@ -30,5 +30,13 @@ public class ClaimApplication {
 
     private LocalDateTime handleTime;
 
+    /** 失主是否已向拾取者致谢：1=已致谢，0=未致谢 */
+    private Integer thanked;
+
+    /** 致谢留言 */
+    private String thankNote;
+
+    private LocalDateTime thankTime;
+
     private LocalDateTime createTime;
 }

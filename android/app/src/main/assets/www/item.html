@@ -45,6 +45,12 @@
         </div>
     </div>
 
+    <!-- 拾取者联系方式（认领确认后可见） -->
+    <div class="card card-glow" id="pickup-card" style="display:none">
+        <h2 class="card-title"><span class="ico-chip" id="ico-pickup"></span>拾取者联系方式</h2>
+        <div id="pickup-body"></div>
+    </div>
+
     <!-- 认领处理 -->
     <div class="card" id="handle-card" style="display:none">
         <h2 class="card-title"><span class="ico-chip" id="ico-handle"></span>认领申请处理</h2>
@@ -63,6 +69,7 @@ let MATCH_VERIFIED = false;
 document.getElementById('ico-match').innerHTML = ICON.sparkle;
 document.getElementById('ico-claim').innerHTML = ICON.inbox;
 document.getElementById('ico-handle').innerHTML = ICON.shield;
+document.getElementById('ico-pickup').innerHTML = ICON.user;
 
 const itemId = () => new URLSearchParams(location.search).get('id');
 const isOwner = () => CURRENT_USER && ITEM && CURRENT_USER.id === ITEM.publisherId;
@@ -78,6 +85,117 @@ async function loadDetail() {
     document.title = ITEM.name + ' · 校园失物招领';
     renderDetail();
     if (CURRENT_USER && (isOwner() || isAdmin())) renderHandle();
+    if (CURRENT_USER) loadPickup();
+}
+
+/* ==================================================================
+ * 拾取者联系方式（F9「感谢接力」）
+ * 认领确认后，失主可以看到是谁捡到的、怎么联系。
+ * ================================================================ */
+async function loadPickup() {
+    const card = document.getElementById('pickup-card');
+    const body = document.getElementById('pickup-body');
+
+    try {
+        /* 场景 A：我发布的「招领」已被人认领 —— 展示认领人（失主）*/
+        if (isOwner() && ITEM.type === 'FOUND') {
+            const r = await api.get('/api/pickup/approved/' + ITEM.id);
+            if (r && r.applicant) {
+                card.style.display = '';
+                body.innerHTML = `
+                    <div class="pu-hero">
+                        <div class="pu-avatar">${esc((r.applicant.nickname || 'U').slice(0, 1))}</div>
+                        <div>
+                            <div class="pu-name">${esc(r.applicant.nickname)}</div>
+                            <div class="pu-sub">已确认认领「${esc(ITEM.name)}」</div>
+                        </div>
+                        <span class="badge badge-green" style="margin-left:auto">已归还</span>
+                    </div>
+                    <div class="pu-rows">
+                        <div class="pu-row"><span>联系方式</span><b>${esc(r.applicant.contact || '未填写')}</b></div>
+                        <div class="pu-row"><span>认领说明</span><b>${esc(r.claim.description || '—')}</b></div>
+                        ${r.claim.thanked ? `
+                        <div class="pu-row"><span>收到致谢</span>
+                            <b class="pu-thank">“${esc(r.claim.thankNote || '谢谢你帮我找回失物！')}”</b></div>` : ''}
+                    </div>
+                    ${r.claim.thanked ? '' : `<p class="muted" style="margin-top:12px;font-size:12.5px">
+                        对方确认收货后即可向您致谢。</p>`}`;
+                return;
+            }
+        }
+
+        /* 场景 B：我提交过认领且已确认 —— 展示拾取者联系方式 + 致谢按钮 */
+        const mine = await api.get('/api/claims');
+        const hit = (mine.mine || []).find(v =>
+            v.item && v.item.id === Number(itemId()) &&
+            v.claim.status === 'APPROVED');
+
+        if (hit) {
+            const c = await api.get('/api/pickup/contact/' + hit.claim.id);
+            card.style.display = '';
+            body.innerHTML = `
+                <div class="pu-hero">
+                    <div class="pu-avatar">${esc((c.pickerNickname || 'U').slice(0, 1))}</div>
+                    <div>
+                        <div class="pu-name">${esc(c.pickerNickname)}</div>
+                        <div class="pu-sub">捡到了「${esc(c.itemName)}」并归还给你</div>
+                    </div>
+                    <span class="badge badge-green" style="margin-left:auto">已归还</span>
+                </div>
+                <div class="pu-rows">
+                    <div class="pu-row"><span>联系方式</span>
+                        <b class="pu-copy" onclick="copyText('${esc(c.pickerContact || '')}')">
+                            ${esc(c.pickerContact || '未填写')}
+                        </b></div>
+                    <div class="pu-row"><span>捡到地点</span><b>${esc(c.pickedLocation || '—')}</b></div>
+                    <div class="pu-row"><span>捡到时间</span><b>${fmtTime(c.pickedTime)}</b></div>
+                    ${c.handleNote ? `<div class="pu-row"><span>处理备注</span><b>${esc(c.handleNote)}</b></div>` : ''}
+                </div>
+                ${c.thanked ? `
+                    <div class="pu-thanked">
+                        <span class="pu-heart">♥</span>
+                        已于 ${fmtTime(c.thankTime)} 致谢
+                        <div class="pu-thanknote">“${esc(c.thankNote)}”</div>
+                    </div>` : `
+                    <div class="field" style="margin-top:14px">
+                        <label for="thank-note">向 TA 说句话</label>
+                        <textarea id="thank-note" maxlength="200" rows="2"
+                            placeholder="谢谢你帮我找回失物！"></textarea>
+                    </div>
+                    <button class="btn-green btn-sm" id="btn-thank" onclick="doThank(${c.claimId})">
+                        <span id="thank-ico"></span> 发送致谢
+                    </button>`}`;
+            const ico = document.getElementById('thank-ico');
+            if (ico) ico.innerHTML = ICON.sparkle;
+            return;
+        }
+    } catch (e) {
+        /* 无权查看或未登录，静默处理 */
+    }
+    card.style.display = 'none';
+}
+
+async function doThank(claimId) {
+    const btn = document.getElementById('btn-thank');
+    const note = (document.getElementById('thank-note') || {}).value || '';
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span> 发送中…';
+    try {
+        await api.post('/api/pickup/thank/' + claimId, { note });
+        toast('致谢已送出，感谢你的善意');
+        loadPickup();
+    } catch (e) {
+        if (!e.handled) toast(e.message, false);
+        btn.disabled = false;
+        btn.innerHTML = '发送致谢';
+    }
+}
+
+function copyText(t) {
+    if (!t) return;
+    navigator.clipboard.writeText(t).then(
+        () => toast('已复制：' + t),
+        () => toast('复制失败，请手动选择', false));
 }
 
 function renderDetail() {

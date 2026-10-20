@@ -41,6 +41,12 @@ public class ItemInfo {
     /** 管理员隐藏标记：1=隐藏，公开列表与搜索统一过滤 */
     private Integer hidden;
 
+    /** 地图标注坐标：底图百分比 X（0~100），为空表示未标注 */
+    private Double mapX;
+
+    /** 地图标注坐标：底图百分比 Y（0~100），为空表示未标注 */
+    private Double mapY;
+
     private LocalDateTime createTime;
 
     private LocalDateTime updateTime;

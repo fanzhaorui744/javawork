@@ -118,6 +118,9 @@ public class ItemService {
         if (changes.getImagePath() != null && !changes.getImagePath().isBlank()) {
             item.setImagePath(changes.getImagePath());
         }
+        /* 地图坐标允许清空（null 表示取消标注） */
+        item.setMapX(changes.getMapX());
+        item.setMapY(changes.getMapY());
         item.setUpdateTime(LocalDateTime.now());
         itemMapper.updateById(item);
         return item;

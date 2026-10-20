@@ -25,6 +25,8 @@ CREATE TABLE IF NOT EXISTS item_info (
     status VARCHAR(20) NOT NULL DEFAULT 'PENDING',
     publisher_id BIGINT NOT NULL,
     hidden INT NOT NULL DEFAULT 0,
+    map_x DOUBLE,
+    map_y DOUBLE,
     create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -41,6 +43,9 @@ CREATE TABLE IF NOT EXISTS claim_application (
     handler_id BIGINT,
     handle_note VARCHAR(500),
     handle_time TIMESTAMP,
+    thanked INT NOT NULL DEFAULT 0,
+    thank_note VARCHAR(500),
+    thank_time TIMESTAMP,
     create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS idx_claim_item ON claim_application (item_id, status);

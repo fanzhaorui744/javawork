@@ -26,8 +26,8 @@
         window.OFFLINE_MODE = true;
     }
 
-    var STORAGE_KEY = 'lostfound.offline.v3';
-    var STATE_VERSION = 3;
+    var STORAGE_KEY = 'lostfound.offline.v5';
+    var STATE_VERSION = 5;
     var LATENCY_MIN = 60;
     var LATENCY_MAX = 180;
 
@@ -197,8 +197,54 @@
     }
 
     /**
+     * 地点 -> {x%, y%}，与后端 DemoDataInitializer.CAMPUS_COORD 完全一致，
+     * 也与前端 js/campus-map.js 的 PLACES 对应（底图为 img/campus-map.jpg）。
+     */
+    var CAMPUS_COORD = {
+        '行知楼': [41.4, 21.9],
+        '艺术楼': [44.1, 34.1],
+        '人文楼': [40.2, 43.8],
+        '社科楼': [48.8, 53.1],
+        '笃行南楼': [25.9, 38.1],
+        '博学南楼D座': [30.8, 45.0],
+        'A座': [41.4, 12.4],
+        'B座': [30.6, 15.7],
+        'C座': [32.0, 11.6],
+        '健康科学研究院': [40.9, 5.3],
+        '办公楼': [59.6, 68.2],
+        '桔园餐厅': [16.2, 8.1],
+        '梅园餐厅': [15.9, 45.0],
+        '翡翠湖宴会厅': [54.1, 9.2],
+        '桔园宿舍楼': [11.1, 15.0],
+        '1号楼': [11.1, 17.9],
+        '松园': [14.1, 39.6],
+        '竹园宿舍楼': [20.2, 50.8],
+        '槐园': [23.5, 53.7],
+        '枫园': [29.1, 60.9],
+        '曙光人工湖': [38.2, 28.6],
+        '莲花池': [40.1, 16.8],
+        '绿化公园': [33.2, 32.6],
+        '神隐花园': [61.4, 33.5],
+        '望湖台': [66.8, 11.6],
+        '杏坛广场': [43.7, 39.5],
+        '南体育场': [36.0, 66.6],
+        '篮球场': [60.7, 37.2],
+        '西门': [2.6, 26.9],
+        '西2门': [57.8, 29.5]
+    };
+
+    /**
      * 物品种子：严格按 DemoDataInitializer 的 item(...) / itemWithStatus(...) 调用顺序与参数。
-     * 每行 = [type, name, category, location, eventTime, description, contact, publisherId, status]
+     * 每行 = [type, name, category, location, mapX, mapY, eventTime,
+     *         description, contact, publisherId, status]
+     * mapX/mapY 为磬苑校区底图（img/campus-map.jpg）百分比坐标，与 static/js/campus-map.js 一致。
+     * imagePath 统一为 null（与 Java 的 i.setImagePath(null) 一致）。
+     */
+    /**
+     * 物品种子：严格按 DemoDataInitializer 的 item(...) / itemWithStatus(...) 调用顺序与参数。
+     * 每行 = [type, name, category, location, mapX, mapY, eventTime,
+     *         description, contact, publisherId, status]
+     * mapX/mapY 为磬苑校区底图（img/campus-map.jpg）百分比坐标，与 static/js/campus-map.js 一致。
      * imagePath 统一为 null（与 Java 的 i.setImagePath(null) 一致）。
      */
     function seedItems() {
@@ -206,93 +252,98 @@
         function m(months, days) { return monthsAgo(months, days); }
 
         var list = [
-            /* ---- 一、待认领（6 条，演示完整认领流程） ---- */
-            ['FOUND', '黑色折叠雨伞', '生活用品', '图书馆二楼自习区', d(1),
-                '在图书馆二楼自习区座位上捡到一把黑色折叠雨伞，伞柄上系着蓝色挂绳，伞面有轻微磨损。认领请说明挂绳细节。',
-                '13800000002', 3, 'PENDING'],
-            ['LOST', '黑色折叠雨伞', '生活用品', '图书馆二楼', d(2),
-                '昨晚在图书馆二楼自习区丢失一把黑色折叠雨伞，伞柄系蓝色挂绳，内有校园卡套。',
+
+            /* ---- 一、感谢接力演示：雨伞已被认领确认（alice 可见 bob 联系方式） ---- */
+            ['FOUND', '黑色折叠雨伞', '生活用品', '行知楼', 41.4, 21.9, d(1),
+                '在行知楼二楼自习区座位上捡到一把黑色折叠雨伞，伞柄上系着蓝色挂绳，伞面有轻微磨损。认领请说明挂绳细节。',
+                '13800000002', 3, 'RESOLVED'],
+            ['LOST', '黑色折叠雨伞', '生活用品', '行知楼', 41.4, 21.9, d(2),
+                '昨晚在行知楼二楼自习区丢失一把黑色折叠雨伞，伞柄系蓝色挂绳，内有校园卡套。',
+                '13800000001', 2, 'RESOLVED'],
+            ['LOST', '校园卡', '证件卡片', '桔园餐厅', 16.2, 8.1, d(3),
+                '10月10日中午在桔园餐厅丢失校园卡，卡面姓名范某某，学号 W1243 开头，捡到请联系，感谢！',
                 '13800000001', 2, 'PENDING'],
-            ['LOST', '校园卡', '证件卡片', '第一食堂', d(3),
-                '10月10日中午在第一食堂丢失校园卡，卡面姓名范某某，学号 W1243 开头，捡到请联系，感谢！',
-                '13800000001', 2, 'PENDING'],
-            ['FOUND', '蓝色保温杯', '生活用品', '教学楼A座301', d(4),
-                '下课后在教学楼A座301捡到蓝色保温杯一个，杯身贴有卡通贴纸，杯盖有磕碰痕迹。',
+            ['FOUND', '蓝色保温杯', '生活用品', 'A座', 41.4, 12.4, d(4),
+                '下课后在 A座 301 捡到蓝色保温杯一个，杯身贴有卡通贴纸，杯盖有磕碰痕迹。',
                 '13800000002', 3, 'PENDING'],
-            ['LOST', '高等数学教材', '书籍资料', '教学楼B座', d(8),
-                '丢失《高等数学》第七版上册，书内有手写笔记和借书卡，封面右下角有破损。',
+            ['LOST', '高等数学教材', '书籍资料', 'B座', 30.6, 15.7, d(8),
+                '在 B座 丢失《高等数学》第七版上册，书内有手写笔记和借书卡，封面右下角有破损。',
                 '13800000001', 4, 'PENDING'],
-            ['FOUND', '苹果无线耳机充电盒', '电子数码', '操场看台', d(12),
-                '傍晚在操场看台捡到一个白色 AirPods 充电盒，盒内有左右耳机，外壳有细小划痕。',
+            ['FOUND', '苹果无线耳机充电盒', '电子数码', '南体育场', 36.0, 66.6, d(12),
+                '傍晚在南体育场看台捡到一个白色 AirPods 充电盒，盒内有左右耳机，外壳有细小划痕。',
                 '13800000002', 2, 'PENDING'],
 
             /* ---- 二、认领处理中（1 条） ---- */
-            ['LOST', '运动水杯', '生活用品', '体育馆', d(15),
-                '体育馆篮球场丢失透明运动水杯一只，杯身印有校徽。',
+            ['LOST', '运动水杯', '生活用品', '南体育场', 36.0, 66.6, d(15),
+                '在南体育场操场丢失透明运动水杯一只，杯身印有校徽。',
                 '13800000003', 4, 'CLAIMING'],
 
             /* ---- 三、已归还（1 条，已完成核心闭环） ---- */
-            ['LOST', 'U盘（32G 银色）', '电子数码', '机房楼3楼', d(45),
-                '机房上课丢失银色 32G U盘一个，内有课程作业文件，捡到必有重谢。',
+            ['LOST', 'U盘（32G 银色）', '电子数码', 'C座', 32.0, 11.6, d(45),
+                '在 C座 机房上课丢失银色 32G U盘一个，内有课程作业文件，捡到必有重谢。',
                 '13800000001', 2, 'RESOLVED'],
 
             /* ---- 四、已关闭（2 条：撤回 / 归档） ---- */
-            ['LOST', '宿舍钥匙串', '生活用品', '南门快递点', d(70),
-                '南门快递点附近丢失钥匙一串，共5把钥匙，带红色钥匙扣。',
+            ['LOST', '宿舍钥匙串', '生活用品', '竹园宿舍楼', 20.2, 50.8, d(70),
+                '竹园宿舍楼下丢失钥匙一串，共5把钥匙，带红色钥匙扣。',
                 '13800000003', 4, 'CLOSED'],
-            ['FOUND', '白色蓝牙耳机', '电子数码', '图书馆一楼大厅', d(52),
-                '图书馆一楼大厅服务台代收白色蓝牙耳机一只，请失主凭购买凭证认领。',
+            ['FOUND', '白色蓝牙耳机', '电子数码', '行知楼', 41.4, 21.9, d(52),
+                '行知楼一楼大厅服务台代收白色蓝牙耳机一只，请失主凭购买凭证认领。',
                 '13800000002', 3, 'CLOSED'],
 
             /* ---- 五、历史月份数据（10 条，撑起逐月趋势图） ---- */
-            ['FOUND', '灰色围巾', '衣物配饰', '图书馆三楼', m(1, 6),
-                '图书馆三楼阅览区捡到灰色针织围巾一条，无品牌标识。',
+            ['FOUND', '灰色围巾', '衣物配饰', '笃行南楼', 25.9, 38.1, m(1, 6),
+                '笃行南楼阅览区捡到灰色针织围巾一条，无品牌标识。',
                 '13800000002', 3, 'PENDING'],
-            ['LOST', '学生证', '证件卡片', '校医院', m(1, 12),
-                '在校医院就诊后丢失学生证，姓名已涂销，请拾到者联系。',
+            ['LOST', '学生证', '证件卡片', '西2门', 57.8, 29.5, m(1, 12),
+                '在西2门附近丢失学生证，姓名已涂销，请拾到者联系。',
                 '13800000001', 2, 'PENDING'],
-            ['FOUND', '机械键盘', '电子数码', '机房楼2楼', m(2, 5),
-                '机房楼2楼捡到黑色 87 键机械键盘一把，键帽有使用痕迹。',
+            ['FOUND', '机械键盘', '电子数码', '健康科学研究院', 40.9, 5.3, m(2, 5),
+                '健康科学研究院机房捡到黑色 87 键机械键盘一把，键帽有使用痕迹。',
                 '13800000002', 3, 'PENDING'],
-            ['LOST', '篮球', '其他', '体育馆', m(2, 18),
-                '体育馆遗失斯伯丁篮球一个，球面写有「3班」字样。',
+            ['LOST', '篮球', '其他', '篮球场', 60.7, 37.2, m(2, 18),
+                '篮球场遗失斯伯丁篮球一个，球面写有「3班」字样。',
                 '13800000003', 4, 'PENDING'],
-            ['FOUND', '笔记本', '书籍资料', '第一食堂', m(3, 9),
-                '第一食堂捡到笔记本一本，内含实验报告与课堂笔记。',
+            ['FOUND', '笔记本', '书籍资料', '人文楼', 40.2, 43.8, m(3, 9),
+                '人文楼捡到笔记本一本，内含实验报告与课堂笔记。',
                 '13800000001', 2, 'PENDING'],
-            ['LOST', '电动车钥匙', '生活用品', '南门车棚', m(3, 21),
-                '南门车棚丢失电动车钥匙，钥匙扣是蓝色小熊造型。',
+            ['LOST', '电动车钥匙', '生活用品', '枫园', 29.1, 60.9, m(3, 21),
+                '枫园楼下丢失电动车钥匙，钥匙扣是蓝色小熊造型。',
                 '13800000002', 3, 'PENDING'],
-            ['FOUND', '充电宝', '电子数码', '图书馆一楼大厅', m(4, 11),
-                '图书馆一楼大厅捡到白色充电宝一个，容量 10000mAh。',
+            ['FOUND', '充电宝', '电子数码', '社科楼', 48.8, 53.1, m(4, 11),
+                '社科楼一楼大厅捡到白色充电宝一个，容量 10000mAh。',
                 '13800000003', 4, 'PENDING'],
-            ['LOST', '眼镜', '衣物配饰', '教学楼C座', m(4, 23),
-                '教学楼C座丢失黑框近视眼镜一副，度数约 400 度。',
+            ['LOST', '眼镜', '衣物配饰', '艺术楼', 44.1, 34.1, m(4, 23),
+                '艺术楼丢失黑框近视眼镜一副，度数约 400 度。',
                 '13800000001', 2, 'PENDING'],
-            ['FOUND', '雨衣', '衣物配饰', '东门传达室', m(5, 7),
-                '东门传达室收到深蓝色雨衣一件，无人认领。',
+            ['FOUND', '雨衣', '衣物配饰', '西2门', 57.8, 29.5, m(5, 7),
+                '西2门传达室收到深蓝色雨衣一件，无人认领。',
                 '13800000002', 3, 'PENDING'],
-            ['LOST', '水卡', '证件卡片', '宿舍楼下', m(5, 16),
-                '宿舍楼下丢失饭卡充值水卡一张，卡内余额不多但希望找回。',
-                '13800000003', 4, 'PENDING']
+            ['LOST', '水卡', '证件卡片', '梅园餐厅', 15.9, 45.0, m(5, 16),
+                '梅园餐厅丢失饭卡充值水卡一张，卡内余额不多但希望找回。',
+                '13800000003', 4, 'PENDING'],
         ];
 
         var out = [];
         for (var i = 0; i < list.length; i++) {
             var t = list[i];
-            var createTime = plusHours(t[4], 2);
+            var createTime = plusHours(t[6], 2);
+            /* mapX/mapY 显式为 null 时按地点名回填 */
+            var fallback = CAMPUS_COORD[t[3]];
             out.push({
                 id: i + 1,
                 type: t[0],
                 name: t[1],
                 category: t[2],
                 location: t[3],
-                eventTime: t[4],
-                description: t[5],
-                contact: t[6],
+                mapX: t[4] != null ? t[4] : (fallback ? fallback[0] : null),
+                mapY: t[5] != null ? t[5] : (fallback ? fallback[1] : null),
+                eventTime: t[6],
+                description: t[7],
+                contact: t[8],
                 imagePath: null,
-                status: t[8],
-                publisherId: t[7],
+                status: t[10],
+                publisherId: t[9],
                 hidden: 0,
                 createTime: createTime,
                 updateTime: createTime
@@ -301,54 +352,69 @@
         return out;
     }
 
-    /** 认领申请：3 条（对齐 DemoDataInitializer 的 claim(...) 调用） */
+    /** 认领申请：4 条（对齐 DemoDataInitializer 的 claim(...) 调用） */
     function seedClaims() {
         return [
+            // 黑色折叠雨伞（item 1）· alice 申请 bob 的招领 · 已确认 → 演示「感谢接力」
+            {
+                id: 1, itemId: 1, applicantId: 2,
+                description: '伞柄上的蓝色挂绳是我系的，伞内还有一张校园卡套，可以核对卡套里的照片。',
+                status: 'APPROVED', handlerId: 1,
+                handleNote: '核实挂绳与卡套细节一致，确认归还', handleTime: daysAgo(1),
+                thanked: 0, thankNote: null, thankTime: null,
+                createTime: daysAgo(1)
+            },
             // 运动水杯（item 7）· bob 申请 · 待处理
             {
-                id: 1, itemId: 7, applicantId: 3,
+                id: 2, itemId: 7, applicantId: 3,
                 description: '杯子是我的，杯底有一道竖着的划痕，杯身上贴过校运会标签但已撕掉。',
                 status: 'PENDING', handlerId: null, handleNote: null, handleTime: null,
+                thanked: 0, thankNote: null, thankTime: null,
                 createTime: daysAgo(14)
             },
             // U盘（item 8）· bob 申请 · 管理员已确认
             {
-                id: 2, itemId: 8, applicantId: 3,
-                description: '我在机房楼3楼捡到一个银色U盘，插上后里面有一个「课程作业」文件夹。',
+                id: 3, itemId: 8, applicantId: 3,
+                description: '我在 C座 机房捡到一个银色U盘，插上后里面有一个「课程作业」文件夹。',
                 status: 'APPROVED', handlerId: 1,
                 handleNote: '核实物品特征一致，确认归还', handleTime: daysAgo(42),
+                thanked: 0, thankNote: null, thankTime: null,
                 createTime: daysAgo(43)
             },
             // 白色蓝牙耳机（item 10）· carol 申请 · 管理员已确认
             {
-                id: 3, itemId: 10, applicantId: 4,
+                id: 4, itemId: 10, applicantId: 4,
                 description: '耳机是我的，右耳外壳有一道浅色刮痕，充电盒内侧贴着保修贴。',
                 status: 'APPROVED', handlerId: 1,
                 handleNote: '核实物品特征一致，确认归还', handleTime: daysAgo(49),
+                thanked: 0, thankNote: null, thankTime: null,
                 createTime: daysAgo(50)
             }
         ];
     }
 
-    /** 站内通知：6 条（对齐 DemoDataInitializer 的 notify(...) 调用） */
+    /** 站内通知：8 条（对齐 DemoDataInitializer 的 notify(...) 调用） */
     function seedNotifications() {
         return [
-            { id: 1, userId: 4, itemId: 7, content: '您发布的「运动水杯」收到一条认领申请，请及时处理。', isRead: 0, createTime: daysAgo(14) },
-            { id: 2, userId: 2, itemId: 8, content: '您发布的「U盘（32G 银色）」认领申请已被确认，物品状态更新为「已归还/已解决」。', isRead: 1, createTime: daysAgo(42) },
-            { id: 3, userId: 3, itemId: 8, content: '您对「U盘（32G 银色）」的认领申请已被确认，请联系发布者取回。', isRead: 1, createTime: daysAgo(42) },
-            { id: 4, userId: 4, itemId: 9, content: '您发布的「宿舍钥匙串」已关闭，不再公开展示。', isRead: 1, createTime: daysAgo(68) },
-            { id: 5, userId: 3, itemId: 10, content: '您发布的「白色蓝牙耳机」认领申请已被确认。', isRead: 1, createTime: daysAgo(49) },
-            { id: 6, userId: 4, itemId: 10, content: '您对「白色蓝牙耳机」的认领申请已被确认。', isRead: 1, createTime: daysAgo(49) }
+            { id: 1, userId: 2, itemId: 1, content: '您对「黑色折叠雨伞」的认领申请已被确认，现在可以查看拾取者联系方式并向 TA 致谢。', isRead: 0, createTime: daysAgo(1) },
+            { id: 2, userId: 3, itemId: 1, content: '失主已确认您捡到的「黑色折叠雨伞」，感谢您的善意。', isRead: 1, createTime: daysAgo(1) },
+            { id: 3, userId: 4, itemId: 7, content: '您发布的「运动水杯」收到一条认领申请，请及时处理。', isRead: 0, createTime: daysAgo(14) },
+            { id: 4, userId: 2, itemId: 8, content: '您发布的「U盘（32G 银色）」认领申请已被确认，物品状态更新为「已归还/已解决」。', isRead: 1, createTime: daysAgo(42) },
+            { id: 5, userId: 3, itemId: 8, content: '您对「U盘（32G 银色）」的认领申请已被确认，请联系发布者取回。', isRead: 1, createTime: daysAgo(42) },
+            { id: 6, userId: 4, itemId: 9, content: '您发布的「宿舍钥匙串」已关闭，不再公开展示。', isRead: 1, createTime: daysAgo(68) },
+            { id: 7, userId: 3, itemId: 10, content: '您发布的「白色蓝牙耳机」认领申请已被确认。', isRead: 1, createTime: daysAgo(49) },
+            { id: 8, userId: 4, itemId: 10, content: '您对「白色蓝牙耳机」的认领申请已被确认。', isRead: 1, createTime: daysAgo(49) }
         ];
     }
 
-    /** 审核记录：4 条（对齐 DemoDataInitializer 的 audit(...) 调用） */
+    /** 审核记录：5 条（对齐 DemoDataInitializer 的 audit(...) 调用） */
     function seedAudits() {
         return [
-            { id: 1, adminId: 1, action: '认领确认', targetId: 8, detail: '审核认领申请 #2，确认物品已归还', createTime: daysAgo(42) },
-            { id: 2, adminId: 4, action: '撤回', targetId: 9, detail: '发布者本人撤回信息，状态变更为已关闭', createTime: daysAgo(68) },
-            { id: 3, adminId: 3, action: '认领确认', targetId: 10, detail: '审核认领申请 #3，确认物品已归还', createTime: daysAgo(49) },
-            { id: 4, adminId: 1, action: '归档', targetId: 10, detail: '已归还信息归档关闭', createTime: daysAgo(48) }
+            { id: 1, adminId: 1, action: '认领确认', targetId: 1, detail: '审核认领申请 #1，确认物品已归还，失主可查看拾取者联系方式', createTime: daysAgo(1) },
+            { id: 2, adminId: 1, action: '认领确认', targetId: 8, detail: '审核认领申请 #3，确认物品已归还', createTime: daysAgo(42) },
+            { id: 3, adminId: 4, action: '撤回', targetId: 9, detail: '发布者本人撤回信息，状态变更为已关闭', createTime: daysAgo(68) },
+            { id: 4, adminId: 3, action: '认领确认', targetId: 10, detail: '审核认领申请 #4，确认物品已归还', createTime: daysAgo(49) },
+            { id: 5, adminId: 1, action: '归档', targetId: 10, detail: '已归还信息归档关闭', createTime: daysAgo(48) }
         ];
     }
 
@@ -356,7 +422,7 @@
         var users = seedUsers();
         return {
             version: STATE_VERSION,
-            seq: { item: 20, claim: 3, notif: 6, audit: 4, user: 4 },
+            seq: { item: 20, claim: 4, notif: 8, audit: 5, user: 4 },
             users: users,
             items: seedItems(),
             claims: seedClaims(),
@@ -416,7 +482,24 @@
     }
 
     function nextId(kind) {
-        state.seq[kind] = (state.seq[kind] || 0) + 1;
+        /*
+         * 兜底：取「序列当前值」与「该集合已有最大 id」的较大者再 +1。
+         * 手工往种子里加数据后忘记同步 seq 时，也不会生成与既有记录重复的 id
+         * （曾经因为 claim 种子从 2 条加到 4 条但 seq.claim 仍是 3，
+         *  导致新建申请拿到 id=4 与种子记录撞车、approve 命中了别人的申请）。
+         */
+        var seq = state.seq[kind] || 0;
+        var coll = kind === 'item' ? state.items
+            : kind === 'claim' ? state.claims
+                : kind === 'notif' ? state.notifications
+                    : kind === 'audit' ? state.audits
+                        : kind === 'user' ? state.users : null;
+        if (coll && coll.length) {
+            for (var i = 0; i < coll.length; i++) {
+                if (coll[i].id > seq) { seq = coll[i].id; }
+            }
+        }
+        state.seq[kind] = seq + 1;
         return state.seq[kind];
     }
 
@@ -482,6 +565,13 @@
     function findUser(id) {
         for (var i = 0; i < state.users.length; i++) {
             if (state.users[i].id === id) { return state.users[i]; }
+        }
+        return null;
+    }
+
+    function findClaim(id) {
+        for (var i = 0; i < state.claims.length; i++) {
+            if (state.claims[i].id === id) { return state.claims[i]; }
         }
         return null;
     }
@@ -664,6 +754,15 @@
     };
 
     /* ---- 物品 ---- */
+    /** 地图坐标（底图百分比）：接受 number 或数字字符串，非法/空 -> null */
+    function coordOf(body, key) {
+        var v = body ? body[key] : null;
+        if (v === null || v === undefined || v === '') { return null; }
+        var n = Number(v);
+        if (isNaN(n)) { return null; }
+        return Math.max(0, Math.min(100, n));
+    }
+
     function validateItemBody(body, isUpdate) {
         if (!isUpdate) {
             var type = str(body.type);
@@ -705,6 +804,8 @@
             status: 'PENDING',
             publisherId: u.id,
             hidden: 0,
+            mapX: coordOf(ctx.body, 'mapX'),
+            mapY: coordOf(ctx.body, 'mapY'),
             createTime: nowIso(),
             updateTime: nowIso()
         };
@@ -784,6 +885,9 @@
         item.eventTime = iso(new Date(ts(ctx.body.eventTime)));
         item.description = str(ctx.body.description).trim();
         item.contact = str(ctx.body.contact).trim();
+        /* 地图坐标：允许清空（null 表示取消标注），与后端 ItemService.update 一致 */
+        item.mapX = coordOf(ctx.body, 'mapX');
+        item.mapY = coordOf(ctx.body, 'mapY');
         if (str(ctx.body.imagePath).trim()) {
             item.imagePath = ctx.body.imagePath;
         }
@@ -893,6 +997,9 @@
             description: description,
             status: 'PENDING',
             handlerId: null,
+            thanked: 0,
+            thankNote: null,
+            thankTime: null,
             handleNote: null,
             handleTime: null,
             createTime: nowIso()
@@ -1105,6 +1212,179 @@
     };
 
     function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+
+    /* ---- 拾取者联系与致谢（F9「感谢接力」） ---- */
+
+    /** 联系方式脱敏：13812345678 -> 138****5678 */
+    function maskContact(contact) {
+        if (!contact) { return null; }
+        var s = String(contact).trim();
+        if (!s) { return null; }
+        if (s.length <= 4) { return '****'; }
+        if (s.length <= 8) { return s.charAt(0) + '****' + s.charAt(s.length - 1); }
+        return s.substring(0, 3) + '****' + s.substring(s.length - 4);
+    }
+
+    /** 名称归一化：去掉空白与常见标点 */
+    function normName(s) {
+        return String(s || '').replace(/[\s（）()【】\[\]·、,，.。-]/g, '').toLowerCase();
+    }
+
+    /** 粗糙相似度：公共字符数 / 较长串长度 */
+    function similarRatio(a, b) {
+        if (!a || !b) { return 0; }
+        var hit = 0;
+        var used = [];
+        for (var i = 0; i < a.length; i++) {
+            for (var j = 0; j < b.length; j++) {
+                if (!used[j] && a.charAt(i) === b.charAt(j)) { used[j] = true; hit++; break; }
+            }
+        }
+        return hit / Math.max(a.length, b.length);
+    }
+
+    /** 寻物 vs 招领 的匹配打分（0~100），与后端 PickupContactService.score 一致 */
+    function pickupScore(lost, found) {
+        var s = 0;
+        var a = normName(lost.name), b = normName(found.name);
+        if (a && a === b) { s += 55; }
+        else if (a && b && (a.indexOf(b) >= 0 || b.indexOf(a) >= 0)) { s += 35; }
+        else if (similarRatio(a, b) >= 0.5) { s += 25; }
+        if (lost.category && lost.category === found.category) { s += 20; }
+        if (lost.location && lost.location === found.location) { s += 15; }
+        if (lost.eventTime && found.eventTime) {
+            var days = Math.abs(ts(lost.eventTime) - ts(found.eventTime)) / 86400000;
+            if (days <= 3) { s += 10; }
+        }
+        return Math.min(s, 100);
+    }
+
+    function pickupReasons(lost, found) {
+        var r = [];
+        var a = normName(lost.name), b = normName(found.name);
+        if (a && a === b) { r.push('物品名称完全一致'); }
+        else if (a && b && (a.indexOf(b) >= 0 || b.indexOf(a) >= 0)) { r.push('物品名称高度相近'); }
+        if (lost.category && lost.category === found.category) { r.push('属于同一类别'); }
+        if (lost.location && lost.location === found.location) { r.push('地点相同'); }
+        if (lost.eventTime && found.eventTime
+            && Math.abs(ts(lost.eventTime) - ts(found.eventTime)) / 86400000 <= 3) {
+            r.push('时间接近');
+        }
+        if (!r.length) { r.push('特征部分吻合'); }
+        return r;
+    }
+
+    function userBrief(userId, withContact) {
+        var u = findUser(userId);
+        return {
+            id: userId,
+            nickname: u ? u.nickname : '未知用户',
+            contact: u ? (withContact ? u.contact : maskContact(u.contact)) : null
+        };
+    }
+
+    handlers.pickupMatch = function (ctx) {
+        var u = currentUser();
+        if (!u) { return unauthorized(); }
+        var lost = findItem(ctx.params.lostItemId);
+        if (!lost) { return notFound(); }
+        if (lost.type !== 'LOST') { return bizErr(400, '只有寻物信息可以查找匹配的招领'); }
+
+        var out = [];
+        state.items.forEach(function (found) {
+            if (found.type !== 'FOUND') { return; }
+            if (found.hidden) { return; }
+            if (found.status === 'CLOSED') { return; }
+            var score = pickupScore(lost, found);
+            if (score < 40) { return; }
+            out.push({
+                item: clone(found),
+                score: score,
+                publisher: userBrief(found.publisherId, false),
+                reasons: pickupReasons(lost, found)
+            });
+        });
+        out.sort(function (a, b) { return b.score - a.score; });
+        return ok(out);
+    };
+
+    handlers.pickupContact = function (ctx) {
+        var u = currentUser();
+        if (!u) { return unauthorized(); }
+        var claim = findClaim(ctx.params.claimId);
+        if (!claim) { return notFound(); }
+        var item = findItem(claim.itemId);
+        if (!item) { return notFound(); }
+
+        var isApplicant = claim.applicantId === u.id;
+        if (!isApplicant && u.role !== 'ADMIN') {
+            return forbidden('无权限：仅认领申请人本人可查看拾取者联系方式');
+        }
+        if (claim.status !== 'APPROVED') {
+            return bizErr(409, '认领尚未确认，暂不能查看拾取者联系方式');
+        }
+
+        var picker = findUser(item.publisherId);
+        return ok({
+            claimId: claim.id,
+            itemId: item.id,
+            itemName: item.name,
+            pickerId: item.publisherId,
+            pickerNickname: picker ? picker.nickname : '未知用户',
+            pickerContact: picker ? picker.contact : null,
+            itemContact: item.contact,
+            pickedLocation: item.location,
+            pickedTime: item.eventTime,
+            handleNote: claim.handleNote,
+            handleTime: claim.handleTime,
+            thanked: claim.thanked || 0,
+            thankNote: claim.thankNote || null,
+            thankTime: claim.thankTime || null
+        });
+    };
+
+    handlers.pickupThank = function (ctx) {
+        var u = currentUser();
+        if (!u) { return unauthorized(); }
+        var claim = findClaim(ctx.params.claimId);
+        if (!claim) { return notFound(); }
+        if (claim.applicantId !== u.id) {
+            return forbidden('无权限：仅认领申请人本人可致谢');
+        }
+        if (claim.status !== 'APPROVED') {
+            return bizErr(409, '认领尚未确认，暂不能致谢');
+        }
+        if (claim.thanked === 1) {
+            return bizErr(409, '已经致谢过了，感谢你的善意');
+        }
+        var body = ctx.body || {};
+        claim.thanked = 1;
+        claim.thankNote = str(body.note).trim() || '谢谢你帮我找回失物！';
+        claim.thankTime = nowIso();
+
+        var item = findItem(claim.itemId);
+        if (item) {
+            notifyUser(item.publisherId, item.id,
+                '失主向您发来致谢：「' + claim.thankNote + '」');
+        }
+        persist();
+        return ok(clone(claim));
+    };
+
+    handlers.pickupApproved = function (ctx) {
+        var u = currentUser();
+        if (!u) { return unauthorized(); }
+        var found = null;
+        for (var i = 0; i < state.claims.length; i++) {
+            var c = state.claims[i];
+            if (c.itemId === ctx.params.foundItemId && c.status === 'APPROVED') {
+                found = c;
+                break;
+            }
+        }
+        if (!found) { return ok(null); }
+        return ok({ claim: clone(found), applicant: userBrief(found.applicantId, true) });
+    };
 
     function matchResult(item, score, reason) {
         return {
@@ -1346,6 +1626,12 @@
         ['POST', /^\/api\/ai\/keywords\/?$/, handlers.aiKeywords, []],
         ['POST', /^\/api\/ai\/description\/?$/, handlers.aiDescription, []],
 
+        // 拾取者联系与致谢（F9「感谢接力」）
+        ['GET', /^\/api\/pickup\/match\/([0-9]+)\/?$/, handlers.pickupMatch, ['lostItemId']],
+        ['GET', /^\/api\/pickup\/contact\/([0-9]+)\/?$/, handlers.pickupContact, ['claimId']],
+        ['POST', /^\/api\/pickup\/thank\/([0-9]+)\/?$/, handlers.pickupThank, ['claimId']],
+        ['GET', /^\/api\/pickup\/approved\/([0-9]+)\/?$/, handlers.pickupApproved, ['foundItemId']],
+
         // 通知
         ['GET', /^\/api\/notifications\/?$/, handlers.notificationList, []],
         ['GET', /^\/api\/notifications\/unread-count\/?$/, handlers.notificationUnread, []],
@@ -1569,7 +1855,7 @@
                 settled = true;
                 delete aiPending[requestId];
                 resolve('');
-            }, 12000);
+            }, 25000);
 
             aiPending[requestId] = function (ok, text) {
                 if (settled) { return; }

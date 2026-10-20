@@ -422,7 +422,7 @@
         var users = seedUsers();
         return {
             version: STATE_VERSION,
-            seq: { item: 20, claim: 3, notif: 6, audit: 4, user: 4 },
+            seq: { item: 20, claim: 4, notif: 8, audit: 5, user: 4 },
             users: users,
             items: seedItems(),
             claims: seedClaims(),
@@ -482,7 +482,24 @@
     }
 
     function nextId(kind) {
-        state.seq[kind] = (state.seq[kind] || 0) + 1;
+        /*
+         * 兜底：取「序列当前值」与「该集合已有最大 id」的较大者再 +1。
+         * 手工往种子里加数据后忘记同步 seq 时，也不会生成与既有记录重复的 id
+         * （曾经因为 claim 种子从 2 条加到 4 条但 seq.claim 仍是 3，
+         *  导致新建申请拿到 id=4 与种子记录撞车、approve 命中了别人的申请）。
+         */
+        var seq = state.seq[kind] || 0;
+        var coll = kind === 'item' ? state.items
+            : kind === 'claim' ? state.claims
+                : kind === 'notif' ? state.notifications
+                    : kind === 'audit' ? state.audits
+                        : kind === 'user' ? state.users : null;
+        if (coll && coll.length) {
+            for (var i = 0; i < coll.length; i++) {
+                if (coll[i].id > seq) { seq = coll[i].id; }
+            }
+        }
+        state.seq[kind] = seq + 1;
         return state.seq[kind];
     }
 

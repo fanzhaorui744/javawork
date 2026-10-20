@@ -41,4 +41,10 @@ public class ItemCreateRequest {
     /** 可选：直接填写本地图片路径进行关联 */
     @Size(max = 200, message = "图片路径不能超过 200 个字符")
     private String imagePath;
+
+    /** 地图标注坐标：底图百分比，0~100，可空 */
+    private Double mapX;
+
+    /** 地图标注坐标：底图百分比，0~100，可空 */
+    private Double mapY;
 }
