@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#04060e">
+    <title>信息详情 · 校园失物招领</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="nav" id="nav"></div>
+
+<div class="container">
+    <div style="margin-bottom:16px">
+        <a href="index.html" class="btn btn-ghost btn-sm" id="back-btn">返回列表</a>
+    </div>
+
+    <div class="card card-glow" id="detail">
+        <p class="muted">加载中…</p>
+    </div>
+
+    <!-- AI 匹配 -->
+    <div class="card" id="match-card" style="display:none">
+        <h2 class="card-title"><span class="ico-chip" id="ico-match"></span>AI 疑似匹配（Top 5）</h2>
+        <div id="match-tip"></div>
+        <div id="match-list"></div>
+    </div>
+
+    <!-- 认领申请 -->
+    <div class="card" id="claim-card" style="display:none">
+        <h2 class="card-title"><span class="ico-chip" id="ico-claim"></span>提交认领申请</h2>
+        <p class="muted" style="margin-bottom:14px">
+            请填写认领说明（如物品的识别细节），发布者核实后会处理您的申请。
+        </p>
+        <div class="field">
+            <label for="c-desc">认领说明 *</label>
+            <textarea id="c-desc" maxlength="500"
+                      placeholder="例如：雨伞伞柄确实有蓝色挂绳，内还有一张校园卡…"></textarea>
+        </div>
+        <div class="mt-12">
+            <button id="c-submit" class="btn-green" onclick="doClaim()">提交认领申请</button>
+        </div>
+    </div>
+
+    <!-- 认领处理 -->
+    <div class="card" id="handle-card" style="display:none">
+        <h2 class="card-title"><span class="ico-chip" id="ico-handle"></span>认领申请处理</h2>
+        <div id="handle-list"></div>
+    </div>
+</div>
+
+    <!-- GitHub Pages 静态部署：启用浏览器端离线引擎接管 /api/** -->
+    <script>window.OFFLINE_MODE = true;</script>
+    <script src="js/offline.js"></script>
+<script src="js/config.js"></script>
+<script src="js/api.js"></script>
+<script src="js/common.js"></script>
+<script>
+let ITEM = null;
+let MATCHES = [];
+let MATCH_VERIFIED = false;
+
+document.getElementById('ico-match').innerHTML = ICON.sparkle;
+document.getElementById('ico-claim').innerHTML = ICON.inbox;
+document.getElementById('ico-handle').innerHTML = ICON.shield;
+
+const itemId = () => new URLSearchParams(location.search).get('id');
+const isOwner = () => CURRENT_USER && ITEM && CURRENT_USER.id === ITEM.publisherId;
+const isAdmin = () => CURRENT_USER && CURRENT_USER.role === 'ADMIN';
+
+async function loadDetail() {
+    try {
+        ITEM = await api.get('/api/items/' + itemId());
+    } catch (e) {
+        document.getElementById('detail').innerHTML = emptyState('信息不存在或已被删除', 'close');
+        return;
+    }
+    document.title = ITEM.name + ' · 校园失物招领';
+    renderDetail();
+    if (CURRENT_USER && (isOwner() || isAdmin())) renderHandle();
+}
+
+function renderDetail() {
+    const el = document.getElementById('detail');
+    const canOperate = isOwner() && ITEM.status === 'PENDING';
+
+    el.innerHTML = `
+        <div class="detail-hero">
+            ${ITEM.imagePath
+                ? `<img class="item-img" src="${esc(ITEM.imagePath)}" alt="${esc(ITEM.name)}" onerror="this.style.display='none'">`
+                : ''}
+            <div class="info">
+                <div class="flex items-center gap-8 flex-wrap">
+                    ${typeBadge(ITEM.type)}
+                    ${statusBadge(ITEM.status)}
+                    ${ITEM.hidden ? '<span class="badge badge-gray">已被管理员隐藏</span>' : ''}
+                </div>
+                <h1>${esc(ITEM.name)}</h1>
+                <div class="detail-meta">
+                    <span class="m-item">${ICON.tag} ${esc(ITEM.category)}</span>
+                    <span class="m-item">${ICON.pin} ${esc(ITEM.location)}</span>
+                    <span class="m-item">${ICON.clock} ${fmtTime(ITEM.eventTime)}</span>
+                    <span class="m-item">${ICON.user} 发布于 ${fmtRelative(ITEM.createTime)}</span>
+                </div>
+                <div class="detail-desc">${esc(ITEM.description)}</div>
+                <div class="detail-meta" style="margin-top:16px;margin-bottom:0">
+                    <span class="m-item">${ICON.user} 联系方式：<b style="color:var(--text)">${esc(ITEM.contact)}</b></span>
+                </div>
+            </div>
+        </div>
+
+        <div class="flex items-center gap-8 flex-wrap" style="margin-top:20px;padding-top:18px;border-top:1px solid var(--border)">
+            ${canOperate ? `
+                <button class="btn-orange btn-sm" onclick="location.href='publish.html?edit=${ITEM.id}'">
+                    ${ICON.edit} 编辑
+                </button>
+                <button class="btn-red btn-sm" onclick="withdraw()">
+                    ${ICON.close} 撤回
+                </button>` : ''}
+            ${(isOwner() || isAdmin()) ? `
+                <input type="file" id="img-file" accept="image/jpeg,image/png"
+                       style="width:auto;max-width:230px;padding:6px 10px!important">
+                <button class="btn-gray btn-sm" onclick="uploadImage()">${ICON.image} 上传图片</button>` : ''}
+            <span class="spacer"></span>
+            <button class="btn-ghost btn-sm" onclick="aiMatch()">${ICON.sparkle} AI 疑似匹配</button>
+        </div>`;
+
+    /* 认领入口：登录、非本人、待认领 */
+    if (CURRENT_USER && !isOwner() && ITEM.status === 'PENDING') {
+        document.getElementById('claim-card').style.display = '';
+        updateClaimBtn();
+    } else {
+        document.getElementById('claim-card').style.display = 'none';
+    }
+}
+
+function updateClaimBtn() {
+    const btn = document.getElementById('c-submit');
+    if (!btn) return;
+    const needVerify = MATCHES.length > 0 && !MATCH_VERIFIED;
+    btn.disabled = needVerify;
+    btn.textContent = needVerify ? '请先勾选下方 AI 匹配结果完成核验' : '提交认领申请';
+}
+
+async function withdraw() {
+    if (!confirm('确定撤回该信息吗？撤回后状态变为「已关闭」且不再公开展示。')) return;
+    try {
+        await api.post('/api/items/' + ITEM.id + '/withdraw');
+        toast('已撤回');
+        loadDetail();
+    } catch (err) { if (!err.handled) toast(err.message, false); }
+}
+
+async function uploadImage() {
+    const f = document.getElementById('img-file').files[0];
+    if (!f) { toast('请先选择图片文件', false); return; }
+    if (f.size > 5 * 1024 * 1024) { toast('文件大小超过 5MB 限制', false); return; }
+    const fd = new FormData();
+    fd.append('file', f);
+    try {
+        await api.upload('/api/items/' + ITEM.id + '/image', fd);
+        toast('图片上传成功');
+        loadDetail();
+    } catch (err) { if (!err.handled) toast(err.message, false); }
+}
+
+async function aiMatch() {
+    const card = document.getElementById('match-card');
+    card.style.display = '';
+    const list = document.getElementById('match-list');
+    list.innerHTML = '<p class="muted"><span class="spinner"></span> 正在匹配，请稍候…</p>';
+    try {
+        const r = await api.get('/api/match/' + ITEM.id);
+        MATCHES = r.matches || [];
+        document.getElementById('match-tip').innerHTML = r.degraded
+            ? `<div class="degrade-tip">⚠️ AI 服务不可用，当前为<b>本地匹配结果</b>，请谨慎核验。</div>`
+            : `<div class="degrade-tip info">🤖 以下为 AI 推荐，<b>请人工核验</b>，勾选确认后才能发起认领。</div>`;
+
+        if (!MATCHES.length) {
+            list.innerHTML = emptyState('暂无疑似匹配记录', 'search');
+            updateClaimBtn();
+            return;
+        }
+        list.innerHTML = MATCHES.map((m, i) => `
+            <div class="match-item">
+                <input type="checkbox" id="mv${i}" onchange="verifyMatch()">
+                <div style="flex:1;min-width:0">
+                    <div class="flex items-center gap-8 flex-wrap" style="margin-bottom:6px">
+                        <a href="item.html?id=${m.itemId}">${esc(m.name)}</a>
+                        ${typeBadge(m.type)}
+                        <span class="badge ${m.score >= 70 ? 'badge-green' : m.score >= 40 ? 'badge-orange' : 'badge-gray'}">
+                            相似度 ${m.score}
+                        </span>
+                    </div>
+                    <div class="muted" style="font-size:12.5px">
+                        ${esc(m.category)} · ${esc(m.location)} · ${fmtTime(m.eventTime)}
+                    </div>
+                    <div style="font-size:13px;margin-top:7px;color:var(--text-dim)">
+                        💡 ${esc(m.reason)}
+                    </div>
+                </div>
+            </div>`).join('');
+        updateClaimBtn();
+    } catch (err) {
+        list.innerHTML = emptyState('匹配失败：' + err.message, 'close');
+    }
+}
+
+function verifyMatch() {
+    MATCH_VERIFIED = document.querySelectorAll('#match-list input[type=checkbox]:checked').length > 0;
+    if (MATCH_VERIFIED) toast('已核验，可发起认领');
+    updateClaimBtn();
+}
+
+async function doClaim() {
+    const desc = document.getElementById('c-desc').value.trim();
+    if (!desc) { toast('请填写认领说明', false); return; }
+    const btn = document.getElementById('c-submit');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span> 提交中…';
+    try {
+        await api.post('/api/claims', { itemId: ITEM.id, description: desc });
+        toast('认领申请已提交，请留意站内通知');
+        setTimeout(loadDetail, 400);
+    } catch (err) {
+        if (!err.handled) toast(err.message, false);
+        btn.disabled = false;
+        updateClaimBtn();
+    }
+}
+
+async function renderHandle() {
+    const data = await api.get('/api/claims');
+    const claims = (data.incoming || []).filter(x => x.claim.itemId === ITEM.id && x.claim.status === 'PENDING');
+    const el = document.getElementById('handle-card');
+    if (!claims.length) { el.style.display = 'none'; return; }
+    el.style.display = '';
+    document.getElementById('handle-list').innerHTML = claims.map(x => `
+        <div class="claim-box">
+            <p><b>${esc(x.applicant)}</b> 提交了认领申请
+                <span class="muted" style="font-size:12.5px">（${fmtTime(x.claim.createTime)}）</span></p>
+            <p class="item-detail-desc">${esc(x.claim.description)}</p>
+            <div class="field" style="margin-bottom:11px">
+                <input id="note-${x.claim.id}" placeholder="处理意见（可选）">
+            </div>
+            <div class="flex gap-8 flex-wrap">
+                <button class="btn-green btn-sm" onclick="handleClaim(${x.claim.id}, 'approve')">${ICON.check} 确认认领</button>
+                <button class="btn-red btn-sm" onclick="handleClaim(${x.claim.id}, 'reject')">${ICON.close} 拒绝</button>
+                <button class="btn-orange btn-sm" onclick="handleClaim(${x.claim.id}, 'request-more')">要求补充信息</button>
+            </div>
+        </div>`).join('');
+}
+
+async function handleClaim(id, action) {
+    const note = document.getElementById('note-' + id).value.trim();
+    const label = { approve: '确认', reject: '拒绝', 'request-more': '要求补充' }[action];
+    if (action === 'reject' && !confirm('确定拒绝该认领申请吗？拒绝后信息将重新开放认领。')) return;
+    try {
+        await api.post('/api/claims/' + id + '/' + action, { note });
+        toast('已' + label);
+        loadDetail();
+    } catch (err) { if (!err.handled) toast(err.message, false); }
+}
+
+(async () => {
+    await loadUser();
+    renderNav('index.html');
+    if (!itemId()) {
+        document.getElementById('detail').innerHTML = emptyState('缺少信息 ID 参数', 'close');
+        return;
+    }
+    await loadDetail();
+})();
+</script>
+</body>
+</html>

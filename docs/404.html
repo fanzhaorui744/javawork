@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#04060e">
+    <title>校园失物招领 · 信息广场</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="nav" id="nav"></div>
+
+<div class="container">
+
+    <!-- ============ Hero ============ -->
+    <section class="hero">
+        <div class="hero-eyebrow">
+            <span class="dot"></span>
+            <span>AI 驱动的校园失物招领平台</span>
+        </div>
+        <h1>
+            让每一次<span class="grad">遗失</span><br>都有回响
+        </h1>
+        <p class="lead">
+            智能匹配 + 全流程追踪，连接「丢东西的人」与「捡到东西的人」。
+        </p>
+
+        <div class="search-box">
+            <span class="ico" id="hero-ico"></span>
+            <input id="f-keyword" placeholder="搜索物品名称、描述关键词…" onkeydown="if(event.key==='Enter')search(1)">
+            <button onclick="search(1)" id="hero-search-btn">搜索</button>
+        </div>
+
+        <div class="metrics">
+            <div class="metric"><div class="val" id="m-total">—</div><div class="lbl">全部信息</div></div>
+            <div class="metric"><div class="val" id="m-lost">—</div><div class="lbl">寻物中</div></div>
+            <div class="metric"><div class="val" id="m-found">—</div><div class="lbl">招领中</div></div>
+            <div class="metric"><div class="val" id="m-resolved">—</div><div class="lbl">已归还</div></div>
+        </div>
+    </section>
+
+    <!-- ============ 筛选 + 列表 ============ -->
+    <div class="card" id="list-card">
+        <div class="page-head" style="margin-bottom:20px">
+            <div>
+                <h2 class="card-title" style="margin-bottom:6px">
+                    <span class="ico-chip" id="ico-list"></span>
+                    信息广场
+                </h2>
+                <div class="sub muted" id="result-hint">正在加载…</div>
+            </div>
+            <a class="btn btn-ghost btn-sm" href="publish.html" id="publish-cta" style="display:none">
+                发布信息
+            </a>
+        </div>
+
+        <div class="filter-bar">
+            <div class="field">
+                <label>类型</label>
+                <select id="f-type" onchange="search(1)">
+                    <option value="">全部类型</option>
+                    <option value="LOST">寻物</option>
+                    <option value="FOUND">招领</option>
+                </select>
+            </div>
+            <div class="field">
+                <label>类别</label>
+                <select id="f-category" onchange="search(1)">
+                    <option value="">全部类别</option>
+                </select>
+            </div>
+            <div class="field">
+                <label>地点</label>
+                <input id="f-location" placeholder="模糊匹配" onkeydown="if(event.key==='Enter')search(1)">
+            </div>
+            <div class="field">
+                <label>开始时间</label>
+                <input id="f-start" type="datetime-local">
+            </div>
+            <div class="field">
+                <label>结束时间</label>
+                <input id="f-end" type="datetime-local">
+            </div>
+            <div class="field filter-actions">
+                <button onclick="search(1)">搜索</button>
+                <button class="btn-gray" onclick="resetFilters()">重置</button>
+            </div>
+        </div>
+
+        <div id="list" class="item-grid"></div>
+        <div class="pager" id="pager" style="display:none">
+            <button class="btn-gray btn-sm" onclick="prevPage()">上一页</button>
+            <span id="pageInfo"></span>
+            <button class="btn-gray btn-sm" onclick="nextPage()">下一页</button>
+        </div>
+    </div>
+</div>
+
+    <!-- GitHub Pages 静态部署：启用浏览器端离线引擎接管 /api/** -->
+    <script>window.OFFLINE_MODE = true;</script>
+    <script src="js/offline.js"></script>
+<script src="js/config.js"></script>
+<script src="js/api.js"></script>
+<script src="js/common.js"></script>
+<script>
+const PAGE_SIZE = 9;
+let page = 1, total = 0;
+
+document.getElementById('hero-ico').innerHTML = ICON.search;
+document.getElementById('ico-list').innerHTML = ICON.file;
+
+(function fillCategories() {
+    const sel = document.getElementById('f-category');
+    CATEGORY_LIST.forEach(c => {
+        const o = document.createElement('option');
+        o.value = c;
+        o.textContent = c;
+        sel.appendChild(o);
+    });
+})();
+
+function params() {
+    const p = new URLSearchParams();
+    const v = id => document.getElementById(id).value.trim();
+    if (v('f-type')) p.set('type', v('f-type'));
+    if (v('f-category')) p.set('category', v('f-category'));
+    if (v('f-location')) p.set('location', v('f-location'));
+    if (v('f-keyword')) p.set('keyword', v('f-keyword'));
+    if (v('f-start')) p.set('startTime', v('f-start') + ':00');
+    if (v('f-end')) p.set('endTime', v('f-end') + ':00');
+    p.set('page', page);
+    p.set('size', PAGE_SIZE);
+    return p.toString();
+}
+
+function itemCardHTML(it) {
+    return `<a class="item-card" href="item.html?id=${it.id}">
+        ${it.imagePath
+            ? `<img class="thumb" src="${esc(it.imagePath)}" alt="" loading="lazy"
+                    onerror="this.outerHTML='<div class=&quot;thumb-ph&quot;>${ICON.image.replace(/"/g, '&quot;')}</div>'">`
+            : `<div class="thumb-ph">${ICON.image}</div>`}
+        <div class="top">
+            ${typeBadge(it.type)}
+            ${statusBadge(it.status)}
+            ${it.hidden ? '<span class="badge badge-gray">已隐藏</span>' : ''}
+        </div>
+        <div class="name">${esc(it.name)}</div>
+        <div class="desc">${esc(it.description || '')}</div>
+        <div class="meta">
+            <div class="row">${ICON.tag}<span>${esc(it.category)}</span></div>
+            <div class="row">${ICON.pin}<span>${esc(it.location)}</span></div>
+            <div class="row">${ICON.clock}<span>${fmtTime(it.eventTime)}</span></div>
+        </div>
+    </a>`;
+}
+
+function skeletons(n) {
+    let h = '';
+    for (let i = 0; i < n; i++) {
+        h += `<div class="item-card" style="pointer-events:none;min-height:210px">
+            <div class="skeleton" style="height:20px;width:56%;margin-bottom:16px"></div>
+            <div class="skeleton" style="height:15px;width:88%;margin-bottom:9px"></div>
+            <div class="skeleton" style="height:15px;width:64%;margin-bottom:20px"></div>
+            <div class="skeleton" style="height:12px;width:44%;margin-bottom:8px"></div>
+            <div class="skeleton" style="height:12px;width:58%"></div>
+        </div>`;
+    }
+    return h;
+}
+
+async function search(p) {
+    page = p || 1;
+    const list = document.getElementById('list');
+    list.innerHTML = skeletons(PAGE_SIZE);
+    document.getElementById('pager').style.display = 'none';
+    document.getElementById('result-hint').textContent = '正在检索…';
+
+    try {
+        const data = await api.get('/api/items?' + params());
+        total = data.total;
+        const arr = data.list || [];
+
+        list.innerHTML = arr.length
+            ? arr.map(itemCardHTML).join('')
+            : emptyState('没有找到匹配的信息，换个条件试试', 'search');
+
+        const lost = arr.filter(x => x.type === 'LOST').length;
+        const found = arr.filter(x => x.type === 'FOUND').length;
+        const done = arr.filter(x => x.status === 'RESOLVED').length;
+        document.getElementById('m-total').textContent = total;
+        document.getElementById('m-lost').textContent = lost;
+        document.getElementById('m-found').textContent = found;
+        document.getElementById('m-resolved').textContent = done;
+
+        const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+        document.getElementById('result-hint').textContent =
+            total === 0 ? '共 0 条结果' : `共 ${total} 条结果 · 第 ${page} / ${pages} 页`;
+        document.getElementById('pageInfo').textContent = `${page} / ${pages}`;
+        document.getElementById('pager').style.display = total > PAGE_SIZE ? '' : 'none';
+
+        if (CURRENT_USER) document.getElementById('publish-cta').style.display = '';
+    } catch (err) {
+        list.innerHTML = emptyState('加载失败：' + err.message, 'close');
+        document.getElementById('result-hint').textContent = '加载失败';
+    }
+}
+
+function resetFilters() {
+    ['f-type', 'f-category', 'f-location', 'f-keyword', 'f-start', 'f-end'].forEach(id => {
+        document.getElementById(id).value = '';
+    });
+    search(1);
+}
+
+function prevPage() { if (page > 1) search(page - 1); }
+function nextPage() { if (page * PAGE_SIZE < total) search(page + 1); }
+
+(async () => {
+    await loadUser();
+    renderNav('index.html');
+    await search(1);
+})();
+</script>
+</body>
+</html>

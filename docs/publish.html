@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#04060e">
+    <title>发布信息 · 校园失物招领</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="nav" id="nav"></div>
+
+<div class="container container-narrow" style="max-width:780px">
+    <div class="page-head">
+        <div>
+            <h1 id="page-title">发布信息</h1>
+            <div class="sub">填写物品信息，让拾取者或失主更快找到你</div>
+        </div>
+    </div>
+
+    <form class="card card-glow" onsubmit="return doPublish(event)">
+        <h2 class="card-title"><span class="ico-chip" id="ico-form"></span>物品信息</h2>
+
+        <div class="form-grid">
+            <!-- 类型：卡片式选择 -->
+            <div class="field">
+                <label>信息类型 *</label>
+                <div class="type-picker" id="type-picker">
+                    <button type="button" class="type-opt" data-type="LOST">
+                        <span class="t-ico" id="tp-lost"></span>
+                        <span class="t-main">寻物</span>
+                        <span class="t-sub">我丢了东西</span>
+                    </button>
+                    <button type="button" class="type-opt" data-type="FOUND">
+                        <span class="t-ico" id="tp-found"></span>
+                        <span class="t-main">招领</span>
+                        <span class="t-sub">我捡到了东西</span>
+                    </button>
+                </div>
+                <select id="p-type" class="hidden">
+                    <option value="LOST">寻物</option>
+                    <option value="FOUND">招领</option>
+                </select>
+            </div>
+
+            <div class="form-grid cols-2">
+                <div class="field">
+                    <label for="p-name">物品名称 *</label>
+                    <input id="p-name" required maxlength="50" placeholder="例如：黑色折叠雨伞">
+                </div>
+                <div class="field">
+                    <label for="p-category">物品类别 *</label>
+                    <select id="p-category"></select>
+                </div>
+            </div>
+
+            <div class="form-grid cols-2">
+                <div class="field">
+                    <label for="p-time">丢失 / 拾取时间 *</label>
+                    <input id="p-time" type="datetime-local" required>
+                </div>
+                <div class="field">
+                    <label for="p-location">
+                        地点 *
+                        <span class="hint">（可直接输入，或在地图上点选）</span>
+                    </label>
+                    <div class="loc-row">
+                        <input id="p-location" required maxlength="50" list="place-options"
+                               placeholder="例如：行知楼、桔园餐厅">
+                        <button type="button" class="btn-gray btn-sm" id="btn-pick-map">
+                            <span id="pick-ico"></span> 地图选点
+                        </button>
+                    </div>
+                    <datalist id="place-options"></datalist>
+                    <div class="loc-picked" id="loc-picked" style="display:none">
+                        <span class="lp-dot"></span>
+                        <span id="lp-text"></span>
+                        <button type="button" class="lp-clear" id="lp-clear" title="清除标注">×</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 地图选点面板 -->
+            <div class="picker-mask" id="picker-mask">
+                <div class="picker-box">
+                    <div class="picker-head">
+                        <div>
+                            <h3>在地图上标出位置</h3>
+                            <p>点击地图上的建筑即可选中，系统会自动吸附到最近的楼栋</p>
+                        </div>
+                        <button type="button" class="picker-x" id="picker-x">×</button>
+                    </div>
+                    <div class="picker-stage" id="picker-stage">
+                        <img src="img/campus-map.jpg" alt="校区地图" id="picker-img" draggable="false">
+                        <div class="picker-layer" id="picker-layer"></div>
+                        <div class="picker-cursor" id="picker-cursor"></div>
+                    </div>
+                    <div class="picker-foot">
+                        <div class="picker-current" id="picker-current">尚未选点</div>
+                        <div class="flex gap-8">
+                            <button type="button" class="btn-gray btn-sm" id="picker-cancel">取消</button>
+                            <button type="button" class="btn btn-sm" id="picker-ok">确认位置</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="field">
+                <label for="p-desc">
+                    物品描述 *
+                    <span class="hint">（写清特征与识别细节，便于核对）</span>
+                </label>
+                <textarea id="p-desc" required maxlength="1000"
+                          placeholder="请描述物品特征、识别细节等，例如：伞柄系着蓝色挂绳，伞面左侧有轻微磨损。"></textarea>
+                <div class="flex items-center gap-8 flex-wrap" style="margin-top:4px">
+                    <button type="button" class="btn-gray btn-sm" onclick="aiPolish(event)" id="btn-ai">
+                        <span id="ai-ico"></span> AI 优化描述
+                    </button>
+                    <span id="ai-hint" class="muted" style="font-size:12.5px"></span>
+                </div>
+            </div>
+
+            <div class="form-grid cols-2">
+                <div class="field">
+                    <label for="p-contact">联系方式 *</label>
+                    <input id="p-contact" required maxlength="50" placeholder="手机号 / 微信号">
+                </div>
+                <div class="field">
+                    <label for="p-image">
+                        物品图片 <span class="hint">（可选，JPG/PNG ≤ 5MB）</span>
+                    </label>
+                    <input id="p-image" type="file" accept="image/jpeg,image/png">
+                </div>
+            </div>
+        </div>
+
+        <div class="mt-24 flex gap-12 flex-wrap">
+            <button type="submit" class="btn-lg" style="flex:1;min-width:180px" id="btn-submit">发布信息</button>
+            <button type="button" class="btn-gray btn-lg" onclick="history.back()">取消</button>
+        </div>
+
+        <p class="muted mt-12" style="font-size:12.5px">
+            提示：发布后信息进入「待认领」状态，可在详情页上传图片、编辑或撤回。
+        </p>
+    </form>
+</div>
+
+    <!-- GitHub Pages 静态部署：启用浏览器端离线引擎接管 /api/** -->
+    <script>window.OFFLINE_MODE = true;</script>
+    <script src="js/offline.js"></script>
+<script src="js/config.js"></script>
+<script src="js/api.js"></script>
+<script src="js/common.js"></script>
+<script src="js/campus-map.js"></script>
+<script>
+const EDIT_ID = new URLSearchParams(location.search).get('edit');
+
+document.getElementById('ico-form').innerHTML = ICON.file;
+document.getElementById('tp-lost').innerHTML = ICON.search;
+document.getElementById('tp-found').innerHTML = ICON.check;
+document.getElementById('ai-ico').innerHTML = ICON.sparkle;
+
+/* ================= 地图选点 ================= */
+let PICKED = null;          /* { x, y, place } */
+let PICK_DRAG = false;
+
+/* 地点输入框的联想列表 */
+(function () {
+    document.getElementById('place-options').innerHTML =
+        CampusMap.PLACES.map(p => `<option value="${p.id}">${p.cat}</option>`).join('');
+})();
+
+document.getElementById('pick-ico').innerHTML = ICON.pin;
+
+function showPicked() {
+    const box = document.getElementById('loc-picked');
+    if (!PICKED) { box.style.display = 'none'; return; }
+    box.style.display = 'flex';
+    const p = PICKED.place ? CampusMap.byId(PICKED.place) : null;
+    document.getElementById('lp-text').innerHTML =
+        `<b>${esc(PICKED.place || '自定义位置')}</b>
+         <span class="muted">已在地图上标注（${PICKED.x.toFixed(1)}%, ${PICKED.y.toFixed(1)}%）</span>`;
+    box.querySelector('.lp-dot').style.background =
+        p ? CampusMap.CAT_COLOR[p.cat] : 'var(--grad)';
+    /* 同步地点输入框 */
+    if (PICKED.place) document.getElementById('p-location').value = PICKED.place;
+}
+
+document.getElementById('lp-clear').onclick = () => {
+    PICKED = null;
+    showPicked();
+};
+
+/* --- 选点面板 --- */
+const pkMask = document.getElementById('picker-mask');
+const pkStage = document.getElementById('picker-stage');
+const pkLayer = document.getElementById('picker-layer');
+const pkCursor = document.getElementById('picker-cursor');
+let pkCurrent = null;
+
+function openPicker() {
+    pkMask.classList.add('open');
+    if (PICKED) { pkCurrent = { x: PICKED.x, y: PICKED.y, place: PICKED.place }; }
+    else { pkCurrent = null; }
+    drawPickerPins();
+    paintPickerCursor();
+}
+function closePicker() { pkMask.classList.remove('open'); }
+
+document.getElementById('btn-pick-map').onclick = openPicker;
+document.getElementById('picker-x').onclick = closePicker;
+document.getElementById('picker-cancel').onclick = closePicker;
+document.getElementById('picker-ok').onclick = () => {
+    if (!pkCurrent) { toast('请先在地图上点选一个位置', false); return; }
+    PICKED = pkCurrent;
+    showPicked();
+    closePicker();
+};
+
+function drawPickerPins() {
+    pkLayer.innerHTML = CampusMap.PLACES.map(p => {
+        const on = pkCurrent && pkCurrent.place === p.id;
+        return `<span class="pk-dot${on ? ' on' : ''}" data-id="${p.id}"
+                    style="left:${p.x}%;top:${p.y}%;--c:${CampusMap.CAT_COLOR[p.cat]}"
+                    title="${p.id}"></span>`;
+    }).join('');
+}
+
+function paintPickerCursor() {
+    if (!pkCurrent) { pkCursor.style.display = 'none'; return; }
+    pkCursor.style.display = 'block';
+    pkCursor.style.left = pkCurrent.x + '%';
+    pkCursor.style.top = pkCurrent.y + '%';
+    document.getElementById('picker-current').innerHTML = pkCurrent.place
+        ? `已选：<b>${esc(pkCurrent.place)}</b>`
+        : `已选：坐标 ${pkCurrent.x.toFixed(1)}%, ${pkCurrent.y.toFixed(1)}%`;
+}
+
+/* 点击地图：就近吸附 */
+function pickAt(ev) {
+    const r = pkStage.getBoundingClientRect();
+    const x = Math.max(0, Math.min(100, (ev.clientX - r.left) / r.width * 100));
+    const y = Math.max(0, Math.min(100, (ev.clientY - r.top) / r.height * 100));
+    const near = CampusMap.nearestPlaces(x, y, 1)[0];
+    const score = near ? CampusMap.snapScore(near.dist) : 0;
+    if (near && score >= 30) {
+        pkCurrent = { x: near.place.x, y: near.place.y, place: near.place.id };
+    } else {
+        pkCurrent = { x: +x.toFixed(1), y: +y.toFixed(1), place: null };
+    }
+    drawPickerPins();
+    paintPickerCursor();
+}
+pkStage.addEventListener('click', pickAt);
+pkLayer.addEventListener('click', e => {
+    const dot = e.target.closest('.pk-dot');
+    if (!dot) return;
+    e.stopPropagation();
+    const p = CampusMap.byId(dot.dataset.id);
+    pkCurrent = { x: p.x, y: p.y, place: p.id };
+    drawPickerPins();
+    paintPickerCursor();
+});
+
+
+/* 类别下拉 */
+(function () {
+    const sel = document.getElementById('p-category');
+    CATEGORY_LIST.forEach(c => {
+        const o = document.createElement('option');
+        o.value = c; o.textContent = c;
+        sel.appendChild(o);
+    });
+})();
+
+/* 类型卡片选择器 */
+document.querySelectorAll('.type-opt').forEach(btn => {
+    btn.addEventListener('click', () => {
+        if (btn.disabled) return;
+        document.querySelectorAll('.type-opt').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        document.getElementById('p-type').value = btn.dataset.type;
+    });
+});
+
+function pickType(t) {
+    document.querySelectorAll('.type-opt').forEach(b => {
+        b.classList.toggle('active', b.dataset.type === t);
+    });
+    document.getElementById('p-type').value = t;
+}
+pickType('LOST');
+
+/* 默认时间 = 现在 */
+(function () {
+    const now = new Date();
+    now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+    document.getElementById('p-time').value = now.toISOString().slice(0, 16);
+})();
+
+async function loadForEdit() {
+    if (!EDIT_ID) return;
+    document.getElementById('page-title').textContent = '编辑信息（仅「待认领」状态可编辑）';
+    document.querySelector('.page-head .sub').textContent = '修改后保存即可生效';
+    document.getElementById('btn-submit').textContent = '保存修改';
+
+    try {
+        const it = await api.get('/api/items/' + EDIT_ID);
+        pickType(it.type);
+        document.querySelectorAll('.type-opt').forEach(b => b.disabled = true);
+        document.getElementById('p-category').value = it.category;
+        document.getElementById('p-name').value = it.name;
+        document.getElementById('p-time').value = (it.eventTime || '').substring(0, 16);
+        document.getElementById('p-location').value = it.location;
+        if (it.mapX != null && it.mapY != null) {
+            PICKED = { x: it.mapX, y: it.mapY, place: CampusMap.normalizeLocation(it.location) };
+            showPicked();
+        }
+        document.getElementById('p-desc').value = it.description;
+        document.getElementById('p-contact').value = it.contact;
+        /* 编辑时不需要再传图片 */
+        document.getElementById('p-image').closest('.field').style.display = 'none';
+    } catch (e) {
+        toast('加载信息失败：' + e.message, false);
+    }
+}
+
+async function aiPolish(ev) {
+    const desc = document.getElementById('p-desc').value.trim();
+    if (!desc) { toast('请先填写粗略描述再使用 AI 优化', false); return; }
+    const btn = document.getElementById('btn-ai');
+    btn.disabled = true;
+    const old = btn.innerHTML;
+    btn.innerHTML = '<span class="spinner"></span> AI 生成中…';
+    try {
+        const r = await api.post('/api/ai/description', { description: desc });
+        document.getElementById('p-desc').value = r.description || desc;
+        document.getElementById('ai-hint').textContent = r.degraded
+            ? '已用本地算法生成草稿，请人工确认'
+            : '已生成 AI 草稿，请编辑确认后再发布';
+        document.getElementById('ai-hint').className = 'muted';
+    } catch (err) {
+        if (!err.handled) toast(err.message, false);
+        document.getElementById('ai-hint').textContent = 'AI 不可用，已保留原描述';
+    }
+    btn.disabled = false;
+    btn.innerHTML = old;
+}
+
+async function doPublish(e) {
+    e.preventDefault();
+    const btn = document.getElementById('btn-submit');
+    const body = {
+        type: document.getElementById('p-type').value,
+        category: document.getElementById('p-category').value,
+        name: document.getElementById('p-name').value.trim(),
+        eventTime: document.getElementById('p-time').value + ':00',
+        location: document.getElementById('p-location').value.trim(),
+        description: document.getElementById('p-desc').value.trim(),
+        contact: document.getElementById('p-contact').value.trim(),
+        mapX: PICKED ? PICKED.x : null,
+        mapY: PICKED ? PICKED.y : null,
+    };
+    btn.disabled = true;
+    const old = btn.textContent;
+    btn.innerHTML = '<span class="spinner"></span> 提交中…';
+    try {
+        if (EDIT_ID) {
+            const { type, ...rest } = body;
+            await api.put('/api/items/' + EDIT_ID, rest);
+            toast('保存成功');
+            setTimeout(() => { location.href = 'item.html?id=' + EDIT_ID; }, 300);
+            return false;
+        }
+        const item = await api.post('/api/items', body);
+        const file = document.getElementById('p-image').files[0];
+        if (file) {
+            const fd = new FormData();
+            fd.append('file', file);
+            try {
+                await api.upload('/api/items/' + item.id + '/image', fd);
+            } catch (err) {
+                toast('信息已发布，但图片上传失败：' + err.message, false);
+                setTimeout(() => { location.href = 'item.html?id=' + item.id; }, 1200);
+                return false;
+            }
+        }
+        toast('发布成功');
+        setTimeout(() => { location.href = 'item.html?id=' + item.id; }, 300);
+    } catch (err) {
+        if (!err.handled) toast(err.message, false);
+        btn.disabled = false;
+        btn.textContent = old;
+    }
+    return false;
+}
+
+(async () => {
+    if (!await requireLogin('publish.html' + location.search)) return;
+    renderNav('publish.html');
+    await loadForEdit();
+})();
+</script>
+
+<style>
+.type-picker { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.type-opt {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    grid-template-rows: auto auto;
+    gap: 1px 11px;
+    align-items: center;
+    text-align: left;
+    padding: 15px 16px;
+    border-radius: var(--radius);
+    background: rgba(0, 0, 0, .3);
+    border: 1px solid var(--border-strong);
+    color: var(--text-dim);
+    box-shadow: none;
+    transition: border-color .18s var(--ease), background .18s var(--ease), color .18s var(--ease);
+}
+.type-opt:hover { background: var(--surface-2); border-color: rgba(99,102,241,.45); box-shadow: none; filter: none; }
+.type-opt .t-ico {
+    grid-row: span 2;
+    width: 34px; height: 34px;
+    border-radius: 10px;
+    display: inline-flex; align-items: center; justify-content: center;
+    background: var(--surface-3);
+    color: var(--text-mute);
+    transition: background .18s var(--ease), color .18s var(--ease);
+}
+.type-opt .t-ico svg { width: 17px; height: 17px; }
+.type-opt .t-main { font-size: 15px; font-weight: 700; color: var(--text); line-height: 1.3; }
+.type-opt .t-sub { font-size: 12px; color: var(--text-mute); line-height: 1.3; }
+.type-opt.active {
+    background: linear-gradient(135deg, rgba(34,211,238,.14), rgba(168,85,247,.14));
+    border-color: rgba(99, 102, 241, .65);
+    box-shadow: 0 0 0 3px rgba(99,102,241,.12);
+}
+.type-opt.active .t-ico { background: var(--grad); color: #fff; }
+.type-opt.active .t-sub { color: var(--text-dim); }
+.type-opt:disabled { opacity: .65; cursor: default; }
+
+/* ================= 地图选点 ================= */
+.loc-row { display: flex; gap: 8px; }
+.loc-row input { flex: 1; }
+.loc-row .btn-gray { white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
+.loc-row .btn-gray svg { width: 14px; height: 14px; }
+
+.loc-picked {
+    display: flex; align-items: center; gap: 8px;
+    margin-top: 8px;
+    padding: 8px 11px;
+    border-radius: 9px;
+    border: 1px solid rgba(99, 102, 241, .38);
+    background: rgba(99, 102, 241, .09);
+    font-size: 12.5px;
+}
+.loc-picked .lp-dot {
+    width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+    box-shadow: 0 0 8px currentColor;
+}
+.loc-picked b { color: var(--text); font-weight: 700; }
+.loc-picked .muted { font-size: 11.5px; margin-left: 4px; }
+.loc-picked .lp-clear {
+    margin-left: auto;
+    background: none; border: 0; box-shadow: none;
+    color: var(--text-mute);
+    font-size: 17px; line-height: 1;
+    padding: 0 2px; cursor: pointer;
+}
+.loc-picked .lp-clear:hover { color: #fb7185; filter: none; box-shadow: none; }
+
+/* 选点遮罩 */
+.picker-mask {
+    position: fixed; inset: 0; z-index: 900;
+    background: rgba(2, 4, 10, .8);
+    backdrop-filter: blur(5px);
+    display: none;
+    align-items: center; justify-content: center;
+    padding: 24px;
+}
+.picker-mask.open { display: flex; }
+
+.picker-box {
+    width: min(1080px, 100%);
+    max-height: calc(100vh - 48px);
+    display: flex; flex-direction: column;
+    background: var(--surface-1);
+    border: 1px solid var(--border-strong);
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 30px 80px -20px rgba(0, 0, 0, .9);
+}
+.picker-head {
+    display: flex; align-items: flex-start; justify-content: space-between;
+    gap: 16px; padding: 16px 20px 13px;
+    border-bottom: 1px solid var(--border);
+}
+.picker-head h3 { margin: 0 0 3px; font-size: 16px; }
+.picker-head p { margin: 0; font-size: 12.5px; color: var(--text-mute); }
+.picker-x {
+    background: none; border: 0; box-shadow: none;
+    color: var(--text-mute); font-size: 24px; line-height: 1;
+    padding: 0 4px; cursor: pointer;
+}
+.picker-x:hover { color: #fff; filter: none; box-shadow: none; }
+
+.picker-stage {
+    position: relative;
+    aspect-ratio: 1700 / 1543;
+    max-height: 62vh;
+    margin: 0 auto;
+    overflow: hidden;
+    cursor: crosshair;
+    background: #06090f;
+    width: 100%;
+}
+.picker-stage img {
+    width: 100%; height: 100%;
+    object-fit: contain;
+    display: block;
+    pointer-events: none;
+}
+.picker-layer { position: absolute; inset: 0; }
+.pk-dot {
+    position: absolute;
+    width: 9px; height: 9px;
+    margin: -4.5px 0 0 -4.5px;
+    border-radius: 50%;
+    background: var(--c);
+    opacity: .5;
+    box-shadow: 0 0 0 1.5px rgba(0, 0, 0, .6);
+    cursor: pointer;
+}
+.pk-dot:hover { opacity: 1; transform: scale(1.45); }
+.pk-dot.on {
+    opacity: 1;
+    box-shadow: 0 0 0 3px rgba(255, 255, 255, .85), 0 0 14px var(--c);
+    transform: scale(1.5);
+}
+.picker-cursor {
+    position: absolute;
+    width: 26px; height: 26px;
+    margin: -13px 0 0 -13px;
+    border-radius: 50%;
+    border: 2px solid #fff;
+    background: rgba(99, 102, 241, .55);
+    box-shadow: 0 0 0 5px rgba(99, 102, 241, .22), 0 4px 16px rgba(0, 0, 0, .8);
+    pointer-events: none;
+    display: none;
+    animation: pkPulse 1.6s ease-in-out infinite;
+}
+@keyframes pkPulse {
+    0%, 100% { box-shadow: 0 0 0 5px rgba(99, 102, 241, .22), 0 4px 16px rgba(0, 0, 0, .8); }
+    50% { box-shadow: 0 0 0 11px rgba(99, 102, 241, .08), 0 4px 16px rgba(0, 0, 0, .8); }
+}
+
+.picker-foot {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 16px; padding: 13px 20px;
+    border-top: 1px solid var(--border);
+    background: rgba(0, 0, 0, .22);
+}
+.picker-current { font-size: 13px; color: var(--text-dim); }
+.picker-current b { color: var(--text); }
+
+@media (max-width: 640px) {
+    .picker-head p { display: none; }
+    .picker-stage { max-height: 48vh; }
+}
+</style>
+</body>
+</html>
