@@ -306,7 +306,14 @@ let lastTapAt = 0;
 stage.addEventListener('pointerdown', e => {
     if (e.target.closest('.map-zoom') || e.target.closest('.map-pop')) return;
     downTarget = e.target;
-    stage.setPointerCapture(e.pointerId);
+    /*
+     * setPointerCapture 可能抛 NotFoundError（指针 id 已失效 / 某些 WebView 内核）。
+     * 一旦抛出会中断本回调，pointers 没登记上，后续拖动与点击就全废了，
+     * 所以这里必须兜住——捕获失败只是失去「拖出舞台仍能跟手」的便利，不影响功能。
+     */
+    try {
+        stage.setPointerCapture(e.pointerId);
+    } catch (err) { /* 忽略：降级为不捕获指针 */ }
     pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
     dragMoved = 0;
     dragging = true;
