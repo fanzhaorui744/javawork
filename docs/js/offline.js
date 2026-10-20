@@ -352,6 +352,7 @@
                 id: 1, itemId: 7, applicantId: 3,
                 description: '杯子是我的，杯底有一道竖着的划痕，杯身上贴过校运会标签但已撕掉。',
                 status: 'PENDING', handlerId: null, handleNote: null, handleTime: null,
+                thanked: 0, thankNote: null, thankTime: null,
                 createTime: daysAgo(14)
             },
             // U盘（item 8）· bob 申请 · 管理员已确认
@@ -360,6 +361,7 @@
                 description: '我在机房楼3楼捡到一个银色U盘，插上后里面有一个「课程作业」文件夹。',
                 status: 'APPROVED', handlerId: 1,
                 handleNote: '核实物品特征一致，确认归还', handleTime: daysAgo(42),
+                thanked: 0, thankNote: null, thankTime: null,
                 createTime: daysAgo(43)
             },
             // 白色蓝牙耳机（item 10）· carol 申请 · 管理员已确认
@@ -368,6 +370,7 @@
                 description: '耳机是我的，右耳外壳有一道浅色刮痕，充电盒内侧贴着保修贴。',
                 status: 'APPROVED', handlerId: 1,
                 handleNote: '核实物品特征一致，确认归还', handleTime: daysAgo(49),
+                thanked: 0, thankNote: null, thankTime: null,
                 createTime: daysAgo(50)
             }
         ];
@@ -525,6 +528,13 @@
     function findUser(id) {
         for (var i = 0; i < state.users.length; i++) {
             if (state.users[i].id === id) { return state.users[i]; }
+        }
+        return null;
+    }
+
+    function findClaim(id) {
+        for (var i = 0; i < state.claims.length; i++) {
+            if (state.claims[i].id === id) { return state.claims[i]; }
         }
         return null;
     }
@@ -950,6 +960,9 @@
             description: description,
             status: 'PENDING',
             handlerId: null,
+            thanked: 0,
+            thankNote: null,
+            thankTime: null,
             handleNote: null,
             handleTime: null,
             createTime: nowIso()
@@ -1314,7 +1327,7 @@
 
         var item = findItem(claim.itemId);
         if (item) {
-            pushNotification(item.publisherId, item.id,
+            notifyUser(item.publisherId, item.id,
                 '失主向您发来致谢：「' + claim.thankNote + '」');
         }
         persist();
@@ -1805,7 +1818,7 @@
                 settled = true;
                 delete aiPending[requestId];
                 resolve('');
-            }, 12000);
+            }, 25000);
 
             aiPending[requestId] = function (ok, text) {
                 if (settled) { return; }
