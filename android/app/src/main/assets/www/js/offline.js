@@ -26,8 +26,8 @@
         window.OFFLINE_MODE = true;
     }
 
-    var STORAGE_KEY = 'lostfound.offline.v4';
-    var STATE_VERSION = 4;
+    var STORAGE_KEY = 'lostfound.offline.v5';
+    var STATE_VERSION = 5;
     var LATENCY_MIN = 60;
     var LATENCY_MAX = 180;
 
@@ -240,18 +240,26 @@
      * mapX/mapY 为磬苑校区底图（img/campus-map.jpg）百分比坐标，与 static/js/campus-map.js 一致。
      * imagePath 统一为 null（与 Java 的 i.setImagePath(null) 一致）。
      */
+    /**
+     * 物品种子：严格按 DemoDataInitializer 的 item(...) / itemWithStatus(...) 调用顺序与参数。
+     * 每行 = [type, name, category, location, mapX, mapY, eventTime,
+     *         description, contact, publisherId, status]
+     * mapX/mapY 为磬苑校区底图（img/campus-map.jpg）百分比坐标，与 static/js/campus-map.js 一致。
+     * imagePath 统一为 null（与 Java 的 i.setImagePath(null) 一致）。
+     */
     function seedItems() {
         function d(n) { return daysAgo(n); }
         function m(months, days) { return monthsAgo(months, days); }
 
         var list = [
-            /* ---- 一、待认领（6 条，演示完整认领流程） ---- */
+
+            /* ---- 一、感谢接力演示：雨伞已被认领确认（alice 可见 bob 联系方式） ---- */
             ['FOUND', '黑色折叠雨伞', '生活用品', '行知楼', 41.4, 21.9, d(1),
-                '在行知楼自习区座位上捡到一把黑色折叠雨伞，伞柄上系着蓝色挂绳，伞面有轻微磨损。认领请说明挂绳细节。',
-                '13800000002', 3, 'PENDING'],
+                '在行知楼二楼自习区座位上捡到一把黑色折叠雨伞，伞柄上系着蓝色挂绳，伞面有轻微磨损。认领请说明挂绳细节。',
+                '13800000002', 3, 'RESOLVED'],
             ['LOST', '黑色折叠雨伞', '生活用品', '行知楼', 41.4, 21.9, d(2),
                 '昨晚在行知楼二楼自习区丢失一把黑色折叠雨伞，伞柄系蓝色挂绳，内有校园卡套。',
-                '13800000001', 2, 'PENDING'],
+                '13800000001', 2, 'RESOLVED'],
             ['LOST', '校园卡', '证件卡片', '桔园餐厅', 16.2, 8.1, d(3),
                 '10月10日中午在桔园餐厅丢失校园卡，卡面姓名范某某，学号 W1243 开头，捡到请联系，感谢！',
                 '13800000001', 2, 'PENDING'],
@@ -320,7 +328,7 @@
         for (var i = 0; i < list.length; i++) {
             var t = list[i];
             var createTime = plusHours(t[6], 2);
-            /* mapX/mapY 显式为 null 时按地点名回填，保证新增地点不至于丢标注 */
+            /* mapX/mapY 显式为 null 时按地点名回填 */
             var fallback = CAMPUS_COORD[t[3]];
             out.push({
                 id: i + 1,
@@ -344,12 +352,21 @@
         return out;
     }
 
-    /** 认领申请：3 条（对齐 DemoDataInitializer 的 claim(...) 调用） */
+    /** 认领申请：4 条（对齐 DemoDataInitializer 的 claim(...) 调用） */
     function seedClaims() {
         return [
+            // 黑色折叠雨伞（item 1）· alice 申请 bob 的招领 · 已确认 → 演示「感谢接力」
+            {
+                id: 1, itemId: 1, applicantId: 2,
+                description: '伞柄上的蓝色挂绳是我系的，伞内还有一张校园卡套，可以核对卡套里的照片。',
+                status: 'APPROVED', handlerId: 1,
+                handleNote: '核实挂绳与卡套细节一致，确认归还', handleTime: daysAgo(1),
+                thanked: 0, thankNote: null, thankTime: null,
+                createTime: daysAgo(1)
+            },
             // 运动水杯（item 7）· bob 申请 · 待处理
             {
-                id: 1, itemId: 7, applicantId: 3,
+                id: 2, itemId: 7, applicantId: 3,
                 description: '杯子是我的，杯底有一道竖着的划痕，杯身上贴过校运会标签但已撕掉。',
                 status: 'PENDING', handlerId: null, handleNote: null, handleTime: null,
                 thanked: 0, thankNote: null, thankTime: null,
@@ -357,8 +374,8 @@
             },
             // U盘（item 8）· bob 申请 · 管理员已确认
             {
-                id: 2, itemId: 8, applicantId: 3,
-                description: '我在机房楼3楼捡到一个银色U盘，插上后里面有一个「课程作业」文件夹。',
+                id: 3, itemId: 8, applicantId: 3,
+                description: '我在 C座 机房捡到一个银色U盘，插上后里面有一个「课程作业」文件夹。',
                 status: 'APPROVED', handlerId: 1,
                 handleNote: '核实物品特征一致，确认归还', handleTime: daysAgo(42),
                 thanked: 0, thankNote: null, thankTime: null,
@@ -366,7 +383,7 @@
             },
             // 白色蓝牙耳机（item 10）· carol 申请 · 管理员已确认
             {
-                id: 3, itemId: 10, applicantId: 4,
+                id: 4, itemId: 10, applicantId: 4,
                 description: '耳机是我的，右耳外壳有一道浅色刮痕，充电盒内侧贴着保修贴。',
                 status: 'APPROVED', handlerId: 1,
                 handleNote: '核实物品特征一致，确认归还', handleTime: daysAgo(49),
@@ -376,25 +393,28 @@
         ];
     }
 
-    /** 站内通知：6 条（对齐 DemoDataInitializer 的 notify(...) 调用） */
+    /** 站内通知：8 条（对齐 DemoDataInitializer 的 notify(...) 调用） */
     function seedNotifications() {
         return [
-            { id: 1, userId: 4, itemId: 7, content: '您发布的「运动水杯」收到一条认领申请，请及时处理。', isRead: 0, createTime: daysAgo(14) },
-            { id: 2, userId: 2, itemId: 8, content: '您发布的「U盘（32G 银色）」认领申请已被确认，物品状态更新为「已归还/已解决」。', isRead: 1, createTime: daysAgo(42) },
-            { id: 3, userId: 3, itemId: 8, content: '您对「U盘（32G 银色）」的认领申请已被确认，请联系发布者取回。', isRead: 1, createTime: daysAgo(42) },
-            { id: 4, userId: 4, itemId: 9, content: '您发布的「宿舍钥匙串」已关闭，不再公开展示。', isRead: 1, createTime: daysAgo(68) },
-            { id: 5, userId: 3, itemId: 10, content: '您发布的「白色蓝牙耳机」认领申请已被确认。', isRead: 1, createTime: daysAgo(49) },
-            { id: 6, userId: 4, itemId: 10, content: '您对「白色蓝牙耳机」的认领申请已被确认。', isRead: 1, createTime: daysAgo(49) }
+            { id: 1, userId: 2, itemId: 1, content: '您对「黑色折叠雨伞」的认领申请已被确认，现在可以查看拾取者联系方式并向 TA 致谢。', isRead: 0, createTime: daysAgo(1) },
+            { id: 2, userId: 3, itemId: 1, content: '失主已确认您捡到的「黑色折叠雨伞」，感谢您的善意。', isRead: 1, createTime: daysAgo(1) },
+            { id: 3, userId: 4, itemId: 7, content: '您发布的「运动水杯」收到一条认领申请，请及时处理。', isRead: 0, createTime: daysAgo(14) },
+            { id: 4, userId: 2, itemId: 8, content: '您发布的「U盘（32G 银色）」认领申请已被确认，物品状态更新为「已归还/已解决」。', isRead: 1, createTime: daysAgo(42) },
+            { id: 5, userId: 3, itemId: 8, content: '您对「U盘（32G 银色）」的认领申请已被确认，请联系发布者取回。', isRead: 1, createTime: daysAgo(42) },
+            { id: 6, userId: 4, itemId: 9, content: '您发布的「宿舍钥匙串」已关闭，不再公开展示。', isRead: 1, createTime: daysAgo(68) },
+            { id: 7, userId: 3, itemId: 10, content: '您发布的「白色蓝牙耳机」认领申请已被确认。', isRead: 1, createTime: daysAgo(49) },
+            { id: 8, userId: 4, itemId: 10, content: '您对「白色蓝牙耳机」的认领申请已被确认。', isRead: 1, createTime: daysAgo(49) }
         ];
     }
 
-    /** 审核记录：4 条（对齐 DemoDataInitializer 的 audit(...) 调用） */
+    /** 审核记录：5 条（对齐 DemoDataInitializer 的 audit(...) 调用） */
     function seedAudits() {
         return [
-            { id: 1, adminId: 1, action: '认领确认', targetId: 8, detail: '审核认领申请 #2，确认物品已归还', createTime: daysAgo(42) },
-            { id: 2, adminId: 4, action: '撤回', targetId: 9, detail: '发布者本人撤回信息，状态变更为已关闭', createTime: daysAgo(68) },
-            { id: 3, adminId: 3, action: '认领确认', targetId: 10, detail: '审核认领申请 #3，确认物品已归还', createTime: daysAgo(49) },
-            { id: 4, adminId: 1, action: '归档', targetId: 10, detail: '已归还信息归档关闭', createTime: daysAgo(48) }
+            { id: 1, adminId: 1, action: '认领确认', targetId: 1, detail: '审核认领申请 #1，确认物品已归还，失主可查看拾取者联系方式', createTime: daysAgo(1) },
+            { id: 2, adminId: 1, action: '认领确认', targetId: 8, detail: '审核认领申请 #3，确认物品已归还', createTime: daysAgo(42) },
+            { id: 3, adminId: 4, action: '撤回', targetId: 9, detail: '发布者本人撤回信息，状态变更为已关闭', createTime: daysAgo(68) },
+            { id: 4, adminId: 3, action: '认领确认', targetId: 10, detail: '审核认领申请 #4，确认物品已归还', createTime: daysAgo(49) },
+            { id: 5, adminId: 1, action: '归档', targetId: 10, detail: '已归还信息归档关闭', createTime: daysAgo(48) }
         ];
     }
 
