@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#04060e">
+    <title>管理后台 · 校园失物招领</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="nav" id="nav"></div>
+
+<div class="container">
+    <div class="page-head">
+        <div>
+            <h1>管理后台</h1>
+            <div class="sub">信息审核、内容治理与处理记录追溯</div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="flex items-center justify-between flex-wrap gap-12" style="justify-content:space-between;margin-bottom:18px">
+            <h2 class="card-title" style="margin-bottom:0">
+                <span class="ico-chip" id="ico-items"></span>
+                信息管理
+            </h2>
+            <label class="check-row">
+                <input type="checkbox" id="hiddenOnly" onchange="loadItems(1)">
+                <span>只看已隐藏</span>
+            </label>
+        </div>
+        <div id="items"><p class="muted">加载中…</p></div>
+        <div class="pager" id="pager" style="display:none">
+            <button class="btn-gray btn-sm" onclick="page>1&&loadItems(page-1)">上一页</button>
+            <span id="pageInfo"></span>
+            <button class="btn-gray btn-sm" onclick="loadItems(page+1)">下一页</button>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2 class="card-title">
+            <span class="ico-chip" id="ico-audit"></span>
+            处理记录
+        </h2>
+        <div id="audits"><p class="muted">加载中…</p></div>
+    </div>
+</div>
+
+<script src="js/config.js"></script>
+<script src="js/api.js"></script>
+<script src="js/common.js"></script>
+<script>
+document.getElementById('ico-items').innerHTML = ICON.file;
+document.getElementById('ico-audit').innerHTML = ICON.shield;
+
+let page = 1, total = 0;
+const size = 10;
+
+async function loadItems(p) {
+    page = p || 1;
+    const hiddenOnly = document.getElementById('hiddenOnly').checked;
+    const el = document.getElementById('items');
+    el.innerHTML = '<p class="muted"><span class="spinner"></span> 加载中…</p>';
+
+    try {
+        const data = await api.get(`/api/admin/items?page=${page}&size=${size}${hiddenOnly ? '&hiddenOnly=true' : ''}`);
+        total = data.total;
+        const list = data.list || [];
+
+        document.getElementById('pageInfo').textContent = `第 ${page} 页 / 共 ${total} 条`;
+        document.getElementById('pager').style.display = total > size ? '' : 'none';
+
+        if (!list.length) {
+            el.innerHTML = emptyState('暂无数据', 'inbox');
+            return;
+        }
+
+        el.innerHTML = `<div class="table-wrap"><table>
+            <thead><tr>
+                <th>ID</th><th>名称</th><th>类型</th><th>状态</th><th>可见</th><th>发布时间</th><th>操作</th>
+            </tr></thead>
+            <tbody>
+            ${list.map(it => `<tr>
+                <td class="nowrap">${it.id}</td>
+                <td><a href="item.html?id=${it.id}">${esc(it.name)}</a></td>
+                <td>${TYPE_LABEL[it.type] || esc(it.type)}</td>
+                <td>${statusBadge(it.status)}</td>
+                <td>${it.hidden
+                    ? '<span class="badge badge-red">已隐藏</span>'
+                    : '<span class="badge badge-green">正常</span>'}</td>
+                <td class="nowrap">${fmtTime(it.createTime)}</td>
+                <td class="nowrap">
+                    ${it.hidden
+                        ? `<button class="btn-green btn-sm" onclick="unhide(${it.id})">恢复</button>`
+                        : `<button class="btn-orange btn-sm" onclick="hide(${it.id})">隐藏</button>`}
+                    ${it.status === 'RESOLVED'
+                        ? `<button class="btn-gray btn-sm" onclick="archive(${it.id})">归档</button>` : ''}
+                    <button class="btn-red btn-sm" onclick="del(${it.id})">删除</button>
+                </td>
+            </tr>`).join('')}
+            </tbody>
+        </table></div>`;
+    } catch (e) {
+        el.innerHTML = emptyState('加载失败：' + e.message, 'close');
+    }
+}
+
+async function loadAudits() {
+    const el = document.getElementById('audits');
+    try {
+        const data = await api.get('/api/admin/audit-records?page=1&size=20');
+        const list = data.list || [];
+        if (!list.length) {
+            el.innerHTML = emptyState('暂无处理记录', 'inbox');
+            return;
+        }
+        el.innerHTML = `<div class="table-wrap"><table>
+            <thead><tr><th>时间</th><th>操作人ID</th><th>动作</th><th>对象ID</th><th>说明</th></tr></thead>
+            <tbody>
+            ${list.map(r => `<tr>
+                <td class="nowrap">${fmtTime(r.createTime)}</td>
+                <td>${r.adminId}</td>
+                <td><span class="badge badge-violet">${esc(r.action)}</span></td>
+                <td>${r.targetId ?? '-'}</td>
+                <td>${esc(r.detail)}</td>
+            </tr>`).join('')}
+            </tbody>
+        </table></div>`;
+    } catch (e) {
+        el.innerHTML = emptyState('加载失败：' + e.message, 'close');
+    }
+}
+
+async function hide(id) {
+    try { await api.post(`/api/admin/items/${id}/hide`); toast('已隐藏'); loadItems(page); loadAudits(); }
+    catch (e) { if (!e.handled) toast(e.message, false); }
+}
+async function unhide(id) {
+    try { await api.post(`/api/admin/items/${id}/unhide`); toast('已恢复'); loadItems(page); loadAudits(); }
+    catch (e) { if (!e.handled) toast(e.message, false); }
+}
+async function archive(id) {
+    try { await api.post(`/api/admin/items/${id}/archive`); toast('已归档关闭'); loadItems(page); loadAudits(); }
+    catch (e) { if (!e.handled) toast(e.message, false); }
+}
+async function del(id) {
+    if (!confirm('删除后数据不可恢复，确定删除该信息吗？')) return;
+    try { await api.del(`/api/admin/items/${id}?confirm=true`); toast('已删除'); loadItems(1); loadAudits(); }
+    catch (e) { if (!e.handled) toast(e.message, false); }
+}
+
+(async () => {
+    if (!await requireAdmin()) return;
+    renderNav('admin.html');
+    await loadItems(1);
+    await loadAudits();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,12 @@
+# 可选：真实 MySQL 8 环境（对应计划书 F7 技术选型）
+# 使用方式：mvn spring-boot:run "-Dspring-boot.run.profiles=mysql"
+# 数据库须先执行 db/schema.sql 建库建表
+spring:
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://localhost:3306/lostfound?useUnicode=true&characterEncoding=utf8mb4&serverTimezone=Asia/Shanghai
+    username: root
+    password: root
+  sql:
+    init:
+      mode: never

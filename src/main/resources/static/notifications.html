@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#04060e">
+    <title>站内通知 · 校园失物招领</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="nav" id="nav"></div>
+
+<div class="container" style="max-width:900px">
+    <div class="page-head">
+        <div>
+            <h1>站内通知</h1>
+            <div class="sub">认领提交、处理结果、确认归还等通知仅发送给当事双方</div>
+        </div>
+        <button class="btn-gray btn-sm" onclick="readAll()">
+            <span id="ico-all"></span> 全部标为已读
+        </button>
+    </div>
+
+    <div class="card">
+        <div id="list"><p class="muted">加载中…</p></div>
+    </div>
+</div>
+
+<script src="js/config.js"></script>
+<script src="js/api.js"></script>
+<script src="js/common.js"></script>
+<script>
+document.getElementById('ico-all').innerHTML = ICON.check;
+
+async function load() {
+    const data = await api.get('/api/notifications');
+    const el = document.getElementById('list');
+    const list = data.list || [];
+
+    if (!list.length) {
+        el.innerHTML = emptyState('暂无通知', 'bell');
+        return;
+    }
+
+    el.innerHTML = list.map(n => `
+        <div class="claim-box" style="${n.isRead ? 'opacity:.62;border-left-color:var(--border)' : ''}">
+            <div class="flex items-start gap-8" style="align-items:flex-start">
+                <span style="color:var(--cyan);flex-shrink:0;margin-top:3px;display:${n.isRead ? 'none' : 'block'}">
+                    ${ICON.bell}
+                </span>
+                <div style="flex:1;min-width:0">
+                    <p style="margin-bottom:7px">${esc(n.content)}</p>
+                    <p class="muted" style="font-size:12.5px;display:flex;align-items:center;gap:11px;flex-wrap:wrap">
+                        <span>${fmtRelative(n.createTime)}</span>
+                        ${n.itemId ? `<a href="item.html?id=${n.itemId}">查看详情 →</a>` : ''}
+                        ${n.isRead ? '' : `<button class="btn-gray btn-sm" onclick="read(${n.id})">标为已读</button>`}
+                    </p>
+                </div>
+            </div>
+        </div>`).join('');
+}
+
+async function read(id) {
+    try {
+        await api.post('/api/notifications/' + id + '/read');
+        load();
+    } catch (e) { if (!e.handled) toast(e.message, false); }
+}
+
+async function readAll() {
+    try {
+        await api.post('/api/notifications/read-all');
+        toast('已全部标为已读');
+        load();
+        if (CURRENT_USER) renderNav('notifications.html');
+    } catch (e) { if (!e.handled) toast(e.message, false); }
+}
+
+(async () => {
+    if (!await requireLogin('notifications.html')) return;
+    renderNav('notifications.html');
+    try {
+        await load();
+    } catch (e) {
+        if (!e.handled) toast(e.message, false);
+    }
+})();
+</script>
+</body>
+</html>

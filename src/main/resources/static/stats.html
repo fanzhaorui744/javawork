@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#04060e">
+    <title>数据统计 · 校园失物招领</title>
+    <link rel="stylesheet" href="css/style.css">
+    <script src="js/echarts.min.js"></script>
+</head>
+<body>
+<div class="nav" id="nav"></div>
+
+<div class="container">
+    <div class="page-head">
+        <div>
+            <h1>数据统计</h1>
+            <div class="sub">由数据库 GROUP BY 聚合查询生成，不接入任何外部 API</div>
+        </div>
+        <button class="btn-gray btn-sm" onclick="load()">
+            <span id="ico-refresh"></span> 刷新
+        </button>
+    </div>
+
+    <div class="metrics" style="margin:0 0 20px;max-width:none">
+        <div class="metric"><div class="val" id="s-total">—</div><div class="lbl">累计信息</div></div>
+        <div class="metric"><div class="val" id="s-cat">—</div><div class="lbl">涉及类别</div></div>
+        <div class="metric"><div class="val" id="s-loc">—</div><div class="lbl">涉及地点</div></div>
+        <div class="metric"><div class="val" id="s-month">—</div><div class="lbl">统计月份</div></div>
+    </div>
+
+    <div class="card">
+        <h2 class="card-title"><span class="ico-chip" id="ico-cat"></span>高频物品类别 TOP10</h2>
+        <div id="chart-category" class="chart-box"></div>
+    </div>
+
+    <div class="card">
+        <h2 class="card-title"><span class="ico-chip" id="ico-loc"></span>常见遗失地点 TOP10</h2>
+        <div id="chart-location" class="chart-box"></div>
+    </div>
+
+    <div class="card">
+        <h2 class="card-title"><span class="ico-chip" id="ico-month"></span>逐月发布量趋势</h2>
+        <div id="chart-monthly" class="chart-box"></div>
+    </div>
+</div>
+
+<script src="js/config.js"></script>
+<script src="js/api.js"></script>
+<script src="js/common.js"></script>
+<script>
+document.getElementById('ico-refresh').innerHTML = ICON.refresh;
+document.getElementById('ico-cat').innerHTML = ICON.tag;
+document.getElementById('ico-loc').innerHTML = ICON.pin;
+document.getElementById('ico-month').innerHTML = ICON.chart;
+
+const CHARTS = {};
+
+/* 深色科技感图表统一主题 */
+const C = {
+    text: '#93a3c4', mute: '#5e6d8c', grid: 'rgba(255,255,255,.07)',
+    cyan: '#22d3ee', indigo: '#6366f1', violet: '#a855f7', green: '#34d399',
+};
+
+function baseGrid() {
+    return { left: 48, right: 24, top: 26, bottom: 56 };
+}
+
+function axisCommon() {
+    return {
+        axisLine: { lineStyle: { color: 'rgba(255,255,255,.14)' } },
+        axisTick: { show: false },
+        axisLabel: { color: C.text, fontSize: 11.5 },
+        splitLine: { lineStyle: { color: C.grid, type: 'dashed' } },
+    };
+}
+
+function initChart(id) {
+    const el = document.getElementById(id);
+    if (CHARTS[id]) { CHARTS[id].dispose(); }
+    CHARTS[id] = echarts.init(el, null, { renderer: 'canvas' });
+    return CHARTS[id];
+}
+
+async function load() {
+    let category, location, monthly;
+    try {
+        [category, location, monthly] = await Promise.all([
+            api.get('/api/stats/category'),
+            api.get('/api/stats/location'),
+            api.get('/api/stats/monthly'),
+        ]);
+    } catch (e) {
+        toast('统计数据加载失败：' + e.message, false);
+        return;
+    }
+
+    const total = category.reduce((s, d) => s + (d.value || 0), 0);
+    document.getElementById('s-total').textContent = total;
+    document.getElementById('s-cat').textContent = category.length;
+    document.getElementById('s-loc').textContent = location.length;
+    document.getElementById('s-month').textContent = monthly.length;
+
+    /* ---- 类别柱状图 ---- */
+    initChart('chart-category').setOption({
+        tooltip: {
+            trigger: 'axis', axisPointer: { type: 'shadow' },
+            backgroundColor: 'rgba(14,20,36,.96)', borderColor: 'rgba(255,255,255,.16)',
+            textStyle: { color: '#e9eefb', fontSize: 12 },
+        },
+        grid: Object.assign(baseGrid(), { bottom: 66 }),
+        xAxis: Object.assign({
+            type: 'category',
+            data: category.map(d => d.name),
+            axisLabel: { color: C.text, fontSize: 11.5, rotate: category.length > 6 ? 32 : 0, interval: 0 },
+        }, { axisLine: axisCommon().axisLine, axisTick: { show: false } }),
+        yAxis: Object.assign({ type: 'value', minInterval: 1 }, {
+            axisLine: { show: false }, axisTick: { show: false },
+            axisLabel: axisCommon().axisLabel, splitLine: axisCommon().splitLine,
+        }),
+        series: [{
+            type: 'bar',
+            data: category.map(d => d.value),
+            barMaxWidth: 40,
+            itemStyle: {
+                borderRadius: [7, 7, 0, 0],
+                color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                    { offset: 0, color: C.cyan },
+                    { offset: 1, color: C.indigo },
+                ]),
+            },
+            label: { show: true, position: 'top', color: C.text, fontSize: 11.5 },
+        }],
+    });
+
+    /* ---- 地点饼图 ---- */
+    initChart('chart-location').setOption({
+        tooltip: {
+            trigger: 'item',
+            backgroundColor: 'rgba(14,20,36,.96)', borderColor: 'rgba(255,255,255,.16)',
+            textStyle: { color: '#e9eefb', fontSize: 12 },
+        },
+        legend: {
+            type: 'scroll', orient: 'vertical', right: 8, top: 'middle',
+            textStyle: { color: C.text, fontSize: 11.5 },
+            itemWidth: 9, itemHeight: 9,
+        },
+        color: [C.cyan, C.indigo, C.violet, C.green, '#fbbf24', '#fb7185',
+                '#38bdf8', '#c084fc', '#4ade80', '#f472b6'],
+        series: [{
+            type: 'pie',
+            radius: ['42%', '68%'],
+            center: ['38%', '50%'],
+            data: location,
+            itemStyle: { borderColor: '#070c18', borderWidth: 2.5 },
+            label: { show: false },
+            labelLine: { show: false },
+            emphasis: {
+                scaleSize: 6,
+                itemStyle: { shadowBlur: 18, shadowColor: 'rgba(99,102,241,.65)' },
+            },
+        }],
+    });
+
+    /* ---- 月度趋势 ---- */
+    initChart('chart-monthly').setOption({
+        tooltip: {
+            trigger: 'axis',
+            backgroundColor: 'rgba(14,20,36,.96)', borderColor: 'rgba(255,255,255,.16)',
+            textStyle: { color: '#e9eefb', fontSize: 12 },
+        },
+        grid: Object.assign(baseGrid(), { bottom: 50 }),
+        xAxis: {
+            type: 'category',
+            boundaryGap: false,
+            data: monthly.map(d => d.name),
+            axisLine: axisCommon().axisLine,
+            axisTick: { show: false },
+            axisLabel: { color: C.text, fontSize: 11.5 },
+        },
+        yAxis: {
+            type: 'value', minInterval: 1,
+            axisLine: { show: false }, axisTick: { show: false },
+            axisLabel: axisCommon().axisLabel, splitLine: axisCommon().splitLine,
+        },
+        series: [{
+            type: 'line',
+            smooth: true,
+            data: monthly.map(d => d.value),
+            symbol: 'circle',
+            symbolSize: 8,
+            lineStyle: { width: 3, color: C.cyan },
+            itemStyle: { color: C.cyan, borderColor: '#070c18', borderWidth: 2 },
+            areaStyle: {
+                color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                    { offset: 0, color: 'rgba(34,211,238,.34)' },
+                    { offset: 1, color: 'rgba(34,211,238,0)' },
+                ]),
+            },
+            label: { show: true, position: 'top', color: C.text, fontSize: 11.5 },
+        }],
+    });
+}
+
+/* 响应式重绘 */
+let resizeTimer;
+window.addEventListener('resize', () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => {
+        Object.values(CHARTS).forEach(c => c && c.resize());
+    }, 150);
+});
+
+(async () => {
+    await loadUser();
+    renderNav('stats.html');
+    await load();
+})();
+</script>
+</body>
+</html>

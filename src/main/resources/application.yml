@@ -1,0 +1,47 @@
+server:
+  port: 8080
+  servlet:
+    encoding:
+      charset: UTF-8
+      force-response: true
+
+spring:
+  application:
+    name: lostfound
+  datasource:
+    driver-class-name: org.h2.Driver
+    url: jdbc:h2:file:./data/lostfound;MODE=MySQL;DATABASE_TO_LOWER=TRUE;CASE_INSENSITIVE_IDENTIFIERS=TRUE;NON_KEYWORDS=USER
+    username: sa
+    password:
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:db/schema.sql
+  servlet:
+    multipart:
+      max-file-size: 6MB
+      max-request-size: 6MB
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.nologging.NoLoggingImpl
+  global-config:
+    banner: false
+    db-config:
+      id-type: auto
+
+# 课程演示配置：会话与 AI
+app:
+  upload-dir: ./uploads
+  demo-data: true            # 首次启动自动写入演示账号与演示数据
+  deepseek:
+    api-key: ${DEEPSEEK_API_KEY:}        # 真实密钥只放本地 application-local.yml 或环境变量，不随代码提交
+    base-url: https://api.deepseek.com
+    model: deepseek-chat
+    timeout-seconds: 10
+    retry: 1
