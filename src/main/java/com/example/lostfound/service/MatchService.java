@@ -32,7 +32,10 @@ public class MatchService {
 
     private final ItemInfoMapper itemMapper;
     private final AiService aiService;
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    // 必须注册 JSR310：toMap 里 eventTime 是 LocalDateTime，
+    // 不注册则 writeValueAsString 序列化时抛异常导致 AI 匹配永远降级
+    private final ObjectMapper objectMapper = new ObjectMapper()
+            .registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule());
 
     @Data
     public static class MatchResult {
