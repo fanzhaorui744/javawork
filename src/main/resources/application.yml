@@ -4,6 +4,12 @@ server:
     encoding:
       charset: UTF-8
       force-response: true
+    # 允许 GitHub Pages（跨站）携带 JSESSIONID：SameSite=None + Secure。
+    # localhost 被浏览器视为可信源，Secure cookie 在 http://localhost 可正常设置。
+    session:
+      cookie:
+        same-site: none
+        secure: true
 
 spring:
   application:

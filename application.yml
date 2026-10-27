@@ -1,0 +1,11 @@
+# 外部配置覆盖（位于 jar 同级，优先级高于 jar 内置 application.yml）
+# 目的：允许 GitHub Pages（https://*.github.io）跨站携带 JSESSIONID，实现
+# 「Pages 静态站 → 连本机后端」组合下的登录态保持。
+# 说明：SameSite=None 必须配合 Secure；localhost 被浏览器视为可信源，
+#       http://localhost 上设置 Secure cookie 不受影响。
+server:
+  servlet:
+    session:
+      cookie:
+        same-site: none
+        secure: true

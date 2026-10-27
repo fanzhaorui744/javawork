@@ -5,7 +5,7 @@ let _authRedirecting = false;
 
 async function apiReq(method, path, body, isForm, opts) {
     opts = opts || {};
-    const opt = { method, credentials: 'same-origin', headers: {} };
+    const opt = { method, credentials: 'include', headers: {} };
     if (body !== undefined && body !== null) {
         if (isForm) {
             opt.body = body;
